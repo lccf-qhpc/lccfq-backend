@@ -20,3 +20,15 @@ class UnknownQPUState(Exception):
     def __init__(self, state):
         self.message = f"QPU state unknown - {state}. Critical failure. Aborting."
         super().__init__(self.message)
+
+
+class UnknownQPUTaskType(Exception):
+    """Exception raised when an unknown task reaches the QPU.
+
+    Attributes:
+        message -- explanation of the error
+    """
+
+    def __init__(self, task):
+        self.message = f"QPU task type unknown - {task}."
+        super().__init__(self.message)

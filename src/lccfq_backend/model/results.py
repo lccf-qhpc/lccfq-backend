@@ -10,7 +10,7 @@ License: Apache 2.0
 Contact: nunezco2@illinois.edu
 """
 from enum import Enum
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Literal
 from pydantic import BaseModel, Field
 
 
@@ -35,14 +35,14 @@ class CircuitResult(TaskResult):
     """Circuits produce distributions of integer counts over bit strings
 
     """
-    result_type: ResultType = Field(default=ResultType.CIRCUIT, const=True)
+    result_type: Literal[ResultType.CIRCUIT] = Field(default=ResultType.CIRCUIT)
     distribution: Dict[str, int]
 
 
 class TestResult(TaskResult):
     """Tests yield named parameters with real values
     """
-    result_type: ResultType = Field(default=ResultType.TEST, const=True)
+    result_type: Literal[ResultType.TEST] = Field(default=ResultType.TEST)
     parameters: Dict[str, float]
 
 
@@ -50,6 +50,6 @@ class ControlAck(TaskResult):
     """Control tasks produce QPU state changes with a status and message
 
     """
-    result_type: ResultType = Field(default=ResultType.CONTROL, const=True)
+    result_type: Literal[ResultType.CONTROL] = Field(default=ResultType.CONTROL)
     status: str  # e.g., "ok" or "error"
     message: Optional[str] = None

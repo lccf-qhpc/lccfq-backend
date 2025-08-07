@@ -15,8 +15,8 @@ import os
 from abc import ABC
 from datetime import datetime
 from enum import Enum
-from typing import List, Dict, Optional, Union
-from pydantic import BaseModel, Field
+from typing import List, Dict, Optional, Literal
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class TaskType(str, Enum):
@@ -61,11 +61,8 @@ class TaskBase(BaseModel, ABC):
     program_id: Optional[int] = None
     timestamp: str = Field(default_factory=current_timestamp)
     tags: Dict[str, str] = Field(default_factory=dict)
-
     type: TaskType
-
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class Gate(BaseModel):
@@ -89,7 +86,7 @@ class CircuitTask(TaskBase):
     """Model for a circuit-based task
 
     """
-    type: TaskType = Field(default=TaskType.CIRCUIT, const=True)
+    type: Literal[TaskType.CIRCUIT] = Field(default=TaskType.CIRCUIT)
     gates: List[Gate]
     shots: int
 
@@ -98,7 +95,8 @@ class TestTask(TaskBase):
     """Model for a test task
 
     """
-    type: TaskType = Field(default=TaskType.TEST, const=True)
+    __test__ = False
+    type: Literal[TaskType.TEST] = Field(default=TaskType.TEST)
     symbol: str
     params: List[int]
     shots: int
@@ -108,6 +106,6 @@ class ControlTask(TaskBase):
     """Model for a control task
 
     """
-    type: TaskType = Field(default=TaskType.CONTROL, const=True)
+    type: Literal[TaskType.CONTROL] = Field(default=TaskType.CONTROL)
     command: str
     params: Optional[List[int]] = Field(default_factory=list)
