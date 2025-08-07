@@ -10,7 +10,7 @@ License: Apache 2.0
 Contact: nunezco2@illinois.edu
 """
 import uuid
-import os
+import getpass
 
 from abc import ABC
 from datetime import datetime
@@ -41,7 +41,7 @@ def get_current_user() -> str:
 
     :return: username
     """
-    return os.getlogin()
+    return getpass.getuser()
 
 
 def current_timestamp() -> str:
