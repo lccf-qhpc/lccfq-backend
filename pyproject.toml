@@ -21,6 +21,7 @@ addopts = "-ra"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.4.1"
+pydantic = "^2.11.7"
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio", "mypy", "ruff"]
