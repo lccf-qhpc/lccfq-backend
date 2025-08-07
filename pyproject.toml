@@ -18,5 +18,9 @@ testpaths = ["src/tests"]
 python_files = ["*_test.py"]
 addopts = "-ra"
 
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.1"
+
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio", "mypy", "ruff"]
