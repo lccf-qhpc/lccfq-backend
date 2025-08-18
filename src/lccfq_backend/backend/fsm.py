@@ -29,12 +29,36 @@ class QPUEvent(str, Enum):
     TASK_FINISHED = "task_finished"
     FIDELITY_DEGRADED = "fidelity_degraded"
     RESET = "reset"
+    RETUNE = "retune"
+    QTOL_OK = "qtol_ok"
+    QTOL_WARN = "qtol_warn"
+    QTOL_FAIL = "qtol_fail"
 
 
 class QPUAbstraction:
     """Abstraction of a QPU as a finite state machine.
 
     """
+
+    # State transitions
+    TRANSITIONS: dict[tuple[QPUState, QPUEvent], QPUState] = {
+        (QPUState.INACCESSIBLE, QPUEvent.CONNECT): QPUState.ACCESSIBLE,
+        (QPUState.UNRESPONSIVE, QPUEvent.DISCONNECT): QPUState.INACCESSIBLE,
+        (QPUState.ACCESSIBLE, QPUEvent.DEVICE_OK): QPUState.RESPONSIVE,
+        (QPUState.ACCESSIBLE, QPUEvent.DEVICE_FAIL): QPUState.UNRESPONSIVE,
+        (QPUState.RESPONSIVE, QPUEvent.TUNE_SUCCESS): QPUState.TUNED,
+        (QPUState.RESPONSIVE, QPUEvent.TUNE_FAIL): QPUState.MISTUNED,
+        (QPUState.MISTUNED, QPUEvent.TUNE_SUCCESS): QPUState.TUNED,
+        (QPUState.TUNED, QPUEvent.FIDELITY_DEGRADED): QPUState.MISTUNED,
+        (QPUState.TUNED, QPUEvent.RESET): QPUState.IDLE,
+        (QPUState.IDLE, QPUEvent.TASK_STARTED): QPUState.BUSY,
+        (QPUState.BUSY, QPUEvent.TASK_FINISHED): QPUState.IDLE,
+        (QPUState.MISTUNED, QPUEvent.RETUNE): QPUState.RESPONSIVE,
+        (QPUState.TUNED, QPUEvent.RETUNE): QPUState.RESPONSIVE,
+        (QPUState.TUNED, QPUEvent.QTOL_OK): QPUState.TUNED,
+        (QPUState.TUNED, QPUEvent.QTOL_WARN): QPUState.TUNED,
+        (QPUState.TUNED, QPUEvent.QTOL_FAIL): QPUState.MISTUNED,
+    }
 
     def __init__(self):
         """The QPU starts with the most conservative assumption, and has to
@@ -67,53 +91,7 @@ class QPUAbstraction:
         :param event: triggering event
         :return: new QPU state
         """
-
-        match (self.state, event):
-            case (QPUState.INACCESSIBLE, QPUEvent.CONNECT):
-                # The QPU connection is successful
-                return QPUState.ACCESSIBLE
-
-            case (QPUState.ACCESSIBLE, QPUEvent.DEVICE_OK):
-                # The QICK controlled device responds
-                return QPUState.RESPONSIVE
-
-            case (QPUState.ACCESSIBLE, QPUEvent.DEVICE_FAIL):
-                # The QPU was accessible, but the device/QICK fails and becomes unresponsive
-                return QPUState.UNRESPONSIVE
-
-            case (QPUState.RESPONSIVE, QPUEvent.TUNE_SUCCESS):
-                # The device/QICK is responsive and was successfully tuned
-                return QPUState.TUNED
-
-            case (QPUState.RESPONSIVE, QPUEvent.TUNE_FAIL):
-                # The device/QICK is responsive, but tuning failed
-                return QPUState.MISTUNED
-
-            case (QPUState.TUNED, QPUEvent.FIDELITY_DEGRADED):
-                # The device was previously tuned, but new observations update the state
-                return QPUState.MISTUNED
-
-            case (QPUState.MISTUNED, QPUEvent.TUNE_SUCCESS):
-                # A tuning task was triggered by the backend and succeeded
-                return QPUState.TUNED
-
-            case (QPUState.TUNED, QPUEvent.RESET):
-                # Once tuned, the qubits must be reset to |0> to start
-                return QPUState.IDLE
-
-            case (QPUState.IDLE, QPUEvent.TASK_STARTED):
-                # QPU idle, the scheduler chooses a task
-                return QPUState.BUSY
-
-            case (QPUState.BUSY, QPUEvent.TASK_FINISHED):
-                # The current task finishes and the QPU becomes available
-                return QPUState.IDLE
-
-            case (QPUState.UNRESPONSIVE, QPUEvent.DISCONNECT):
-                # QPU is deemed unresponsive, the backend disconnects
-                return QPUState.INACCESSIBLE
-
-        return None
+        return self.TRANSITIONS.get((self.state, event))
 
     def _invalid_transition(self, event: QPUEvent):
         """Handle invalid transitions

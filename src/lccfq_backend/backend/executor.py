@@ -14,7 +14,7 @@ from ..model.tasks import CircuitTask, TestTask, ControlTask, TaskType
 from ..model.results import CircuitResult, TestResult, ControlAck
 from .fsm import QPUAbstraction, QPUEvent
 from .error import UnknownQPUTaskType
-# from .hwman_client import HWManClient
+from .hwman_client import HWManClient
 
 
 class QPUExecutor:
@@ -24,7 +24,7 @@ class QPUExecutor:
 
     def __init__(self):
         self.qpu = QPUAbstraction()
-        # self.hwman = HWManClient(...)
+        self.hwman = HWManClient()
 
     def execute(self, task: Union[CircuitTask, TestTask, ControlTask]):
         """Dispatch mechanism for tasks.
@@ -49,11 +49,9 @@ class QPUExecutor:
         :return: result of executing the circuit
         """
         self.qpu.transition(QPUEvent.TASK_STARTED)
-
-        # result = self.hwman.run_circuit(task.gates, task.shots)
-        result = {"000": 420, "111": 580}  # placeholder
-
+        result = self.hwman.run_circuit(task.gates, task.shots)
         self.qpu.transition(QPUEvent.TASK_FINISHED)
+
         return CircuitResult(task_id=task.task_id, distribution=result)
 
     def _execute_test(self, task: TestTask) -> TestResult:
@@ -63,14 +61,9 @@ class QPUExecutor:
         :return: test results
         """
         self.qpu.transition(QPUEvent.TASK_STARTED)
-
-        # params = self.hwman.run_test(task.symbol, task.params, task.shots)
-        params = {
-            "fidelity": 0.982,
-            "xeb_fit": 0.975
-        }
-
+        params = self.hwman.run_test(task.symbol, task.params, task.shots)
         self.qpu.transition(QPUEvent.TASK_FINISHED)
+
         return TestResult(task_id=task.task_id, parameters=params)
 
     def _execute_control(self, task: ControlTask) -> ControlAck:
@@ -88,5 +81,46 @@ class QPUExecutor:
             case "disconnect":
                 self.qpu.transition(QPUEvent.DISCONNECT)
                 return ControlAck(task_id=task.task_id, status="ok", message="Disconnected from QPU")
+            case "retune":
+                result = self.hwman.retune()
+
+                if result.status == HWManStatus.OK:
+                    self.qpu.update_observables(result.observables)
+                    self.qpu.transition(QPUEvent.RETUNED)
+                    return ControlAck(task_id=task.task_id, status="ok", message="QPU successfully re-tuned")
+                else:
+                    self.qpu.transition(QPUEvent.TUNE_FAIL)
+                    return ControlAck(task_id=task.task_id, status="error", message=result.message)
+            case "resetall":
+                result = self.hwman.reset_all()
+
+                if result.status == HWManStatus.OK:
+                    self.qpu.transition(QPUEvent.RESET)
+                    return ControlAck(task_id=task.task_id, status="ok", message="Full QPU reset complete")
+                else:
+                    self.qpu.transition(QPUEvent.TUNE_FAIL)
+                    return ControlAck(task_id=task.task_id, status="error", message=result.message)
+            case "qtol":
+                tolerance = float(task.params[0]) if task.params else 0.98
+                max_retries = int(task.params[1]) if len(task.params) > 1 else 3
+
+                for attempt in range(max_retries):
+                    fidelity = self.hwman.evaluate_fidelity()
+                    if fidelity >= tolerance:
+                        self.qpu.transition(QPUEvent.TUNE_SUCCESS)
+                        return ControlAck(task_id=task.task_id, status="ok",
+                                          message=f"Fidelity {fidelity:.3f} meets tolerance {tolerance:.3f}")
+                    self.hwman.retune()
+
+                fidelity = self.hwman.evaluate_fidelity()
+
+                if fidelity >= tolerance:
+                    self.qpu.transition(QPUEvent.TUNE_SUCCESS)
+                    return ControlAck(task_id=task.task_id, status="warning",
+                                      message=f"Fidelity {fidelity:.3f} meets tolerance after retries, but warning issued")
+                else:
+                    self.qpu.transition(QPUEvent.TUNE_FAIL)
+                    return ControlAck(task_id=task.task_id, status="error",
+                                      message=f"Fidelity {fidelity:.3f} below tolerance {tolerance:.3f}")
             case _:
                 return ControlAck(task_id=task.task_id, status="error", message=f"Unknown control: {task.command}")
