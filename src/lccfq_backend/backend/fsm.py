@@ -51,6 +51,7 @@ class QPUAbstraction:
         (QPUState.MISTUNED, QPUEvent.TUNE_SUCCESS): QPUState.TUNED,
         (QPUState.TUNED, QPUEvent.FIDELITY_DEGRADED): QPUState.MISTUNED,
         (QPUState.TUNED, QPUEvent.RESET): QPUState.IDLE,
+        (QPUState.IDLE, QPUEvent.RESET): QPUState.IDLE,
         (QPUState.IDLE, QPUEvent.TASK_STARTED): QPUState.BUSY,
         (QPUState.BUSY, QPUEvent.TASK_FINISHED): QPUState.IDLE,
         (QPUState.MISTUNED, QPUEvent.RETUNE): QPUState.RESPONSIVE,

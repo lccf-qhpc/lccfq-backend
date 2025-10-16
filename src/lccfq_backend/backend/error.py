@@ -32,3 +32,18 @@ class UnknownQPUTaskType(Exception):
     def __init__(self, task):
         self.message = f"QPU task type unknown - {task}."
         super().__init__(self.message)
+
+
+class QPUQueueEmpty(Exception):
+    """Exception raised when an unknown task reaches the QPU.
+
+    Attributes:
+        message -- explanation of the error
+    """
+
+    def __init__(self):
+        self.message = f"QPU queue is empty."
+        super().__init__(self.message)
+
+
+

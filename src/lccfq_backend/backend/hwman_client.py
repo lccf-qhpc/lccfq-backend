@@ -9,9 +9,20 @@ Description:
 License: Apache 2.0
 Contact: nunezco2@illinois.edu
 """
+from enum import Enum
 from typing import List, Dict, Tuple, Optional
 from ..model.tasks import Gate
 from ..model.observables import QubitObservable
+
+
+class HWManStatus(str, Enum):
+    """Possible statuses returned by the Hardware Manager."""
+    OK = "ok"
+    WARNING = "warning"
+    ERROR = "error"
+    RETUNE_REQUIRED = "retune_required"
+    TIMEOUT = "timeout"
+    DISCONNECTED = "disconnected"
 
 
 class HWManClient:
@@ -45,11 +56,8 @@ class HWManClient:
             "xeb_fit": 0.975
         }
 
-    def run_retune(self) -> Tuple[bool, Optional[str], Optional[Dict[int, QubitObservable]]]:
-        """Retune the device and update qubit observables.
-
-        :return:
-        """
+    def retune(self) -> Tuple[HWManStatus, Optional[str], Optional[Dict[int, QubitObservable]]]:
+        """Retune the device and update qubit observables."""
         # TODO: provide real implementation
         observables = {
             i: QubitObservable(
@@ -66,23 +74,22 @@ class HWManClient:
                 measurement_duration=12.0
             ) for i in range(5)
         }
-        return True, None, observables
+        return HWManStatus.OK, None, observables
 
-    def run_reset_all(self) -> Tuple[bool, Optional[str]]:
-        """Reset all qubits
+    def run_reset_all(self) -> Tuple[HWManStatus, Optional[str]]:
+        """Reset all qubits."""
+        return HWManStatus.OK, None
 
-        :return:
-        """
-        return True, None
+    def evaluate_fidelity(self) -> float:
+        """Evaluate current QPU fidelity."""
+        # TODO: integrate with HWMan metrics once available
+        return 0.981
 
     def run_qtol(self, threshold: float, retries: int = 0) -> Tuple[
-        bool, Optional[str], Optional[Dict[int, QubitObservable]]]:
-
-        """Set the qubit fidelity tolerance threshold for XEB RCS.
-
-        """
+        HWManStatus, Optional[str], Optional[Dict[int, QubitObservable]]]:
+        """Set the qubit fidelity tolerance threshold for XEB RCS."""
         if threshold > 0.99:
-            return False, "Unable to reach desired fidelity.", None
+            return HWManStatus.ERROR, "Unable to reach desired fidelity.", None
 
         observables = {
             i: QubitObservable(
@@ -101,9 +108,9 @@ class HWManClient:
         }
 
         if threshold < 0.975:
-            return True, None, observables
+            return HWManStatus.OK, None, observables
         else:
-            return True, "Fidelity threshold not met after retries", observables
+            return HWManStatus.WARNING, "Fidelity threshold not met after retries", observables
 
     def shutdown(self):
         """Wrap up the hardware manager client connection.

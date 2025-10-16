@@ -9,29 +9,52 @@ Description:
 License: Apache 2.0
 Contact: nunezco2@illinois.edu
 """
-from typing import Union
+from typing import Union, Optional
 from ..model.tasks import CircuitTask, TestTask, ControlTask, TaskType
 from ..model.results import CircuitResult, TestResult, ControlAck
-from .fsm import QPUAbstraction, QPUEvent
-from .error import UnknownQPUTaskType
-from .hwman_client import HWManClient
+from .queue import QPUTaskQueue, QueueEntry
+from .fsm import QPUAbstraction, QPUEvent, QPUState
+from .error import UnknownQPUTaskType, QPUQueueEmpty
+from .hwman_client import HWManClient, HWManStatus
 
 
 class QPUExecutor:
-    """Representation of the QPU executor
-
-    """
+    """Representation of the QPU executor"""
 
     def __init__(self):
         self.qpu = QPUAbstraction()
         self.hwman = HWManClient()
+        self.queue = QPUTaskQueue()
 
-    def execute(self, task: Union[CircuitTask, TestTask, ControlTask]):
-        """Dispatch mechanism for tasks.
+    def execute(self, task: Union[CircuitTask, TestTask, ControlTask], user: str):
+        """Enqueue and dispatch a QPU task.
 
-        :param task: a circuit, a test or a control task
-        :return: result of action
+        :param task: a circuit, test or control task
+        :param user: user requesting task
+        :return: result if executed, or None if deferred
         """
+        entry = self.queue.enqueue(task, user=user)
+
+        print(f"[QPUExecutor] Task enqueued: {entry.task.task_id} ({task.type}) by {user}")
+
+        if not self.qpu.state == QPUState.IDLE:
+            print(f"[QPUExecutor] QPU busy (state: {self.qpu.state}), deferring task {entry.task.task_id}")
+            return None
+
+        return self._execute_next()
+
+    def _execute_next(self) -> Optional[Union[CircuitResult, TestResult, ControlAck]]:
+        """Try to dequeue and execute next task."""
+        entry = self.queue.dequeue()
+
+        print(entry)
+
+        if not entry:
+            raise QPUQueueEmpty()
+
+        task = entry.task
+        print(f"[QPUExecutor] Dispatching task {task.task_id} ({task.type}) for user {entry.user}")
+
         match task.type:
             case TaskType.CIRCUIT:
                 return self._execute_circuit(task)
@@ -43,57 +66,33 @@ class QPUExecutor:
                 raise UnknownQPUTaskType(task.type)
 
     def _execute_circuit(self, task: CircuitTask) -> CircuitResult:
-        """Execute a circuit task.
-
-        :param task: circuit task
-        :return: result of executing the circuit
-        """
         self.qpu.transition(QPUEvent.TASK_STARTED)
         result = self.hwman.run_circuit(task.gates, task.shots)
         self.qpu.transition(QPUEvent.TASK_FINISHED)
-
         return CircuitResult(task_id=task.task_id, distribution=result)
 
     def _execute_test(self, task: TestTask) -> TestResult:
-        """Execute a test task.
-
-        :param task: test task
-        :return: test results
-        """
         self.qpu.transition(QPUEvent.TASK_STARTED)
         params = self.hwman.run_test(task.symbol, task.params, task.shots)
         self.qpu.transition(QPUEvent.TASK_FINISHED)
-
         return TestResult(task_id=task.task_id, parameters=params)
 
     def _execute_control(self, task: ControlTask) -> ControlAck:
-        """Execute a control task.
-
-        Note that control tasks do not reach the QPU, and only model the state in the backend.
-
-        :param task:
-        :return:
-        """
         match task.command:
             case "reset":
                 self.qpu.transition(QPUEvent.RESET)
                 return ControlAck(task_id=task.task_id, status="ok", message="QPU reset")
-            case "disconnect":
-                self.qpu.transition(QPUEvent.DISCONNECT)
-                return ControlAck(task_id=task.task_id, status="ok", message="Disconnected from QPU")
             case "retune":
                 result = self.hwman.retune()
-
                 if result.status == HWManStatus.OK:
                     self.qpu.update_observables(result.observables)
-                    self.qpu.transition(QPUEvent.RETUNED)
+                    self.qpu.transition(QPUEvent.RETUNE)
                     return ControlAck(task_id=task.task_id, status="ok", message="QPU successfully re-tuned")
                 else:
                     self.qpu.transition(QPUEvent.TUNE_FAIL)
                     return ControlAck(task_id=task.task_id, status="error", message=result.message)
             case "resetall":
                 result = self.hwman.reset_all()
-
                 if result.status == HWManStatus.OK:
                     self.qpu.transition(QPUEvent.RESET)
                     return ControlAck(task_id=task.task_id, status="ok", message="Full QPU reset complete")
@@ -106,6 +105,7 @@ class QPUExecutor:
 
                 for attempt in range(max_retries):
                     fidelity = self.hwman.evaluate_fidelity()
+
                     if fidelity >= tolerance:
                         self.qpu.transition(QPUEvent.TUNE_SUCCESS)
                         return ControlAck(task_id=task.task_id, status="ok",
