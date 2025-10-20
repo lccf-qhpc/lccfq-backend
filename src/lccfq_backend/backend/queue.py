@@ -5,23 +5,23 @@ Date: 2025-10-16
 
 This module implements the backend queue abstraction for LCCFQ. It allows pending quantum tasks
 from multiple users and programs to be stored, dequeued, inspected, and managed with context control.
-
 """
+
 from typing import Optional, List, Dict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from collections import deque, defaultdict
 from ..model.tasks import TaskBase
 from ..model.context import QPUExecutionContext
-from threading import Lock
-import uuid
-import asyncio
+from ..logging.logger import setup_logger
+
+logger = setup_logger("QPUTaskQueue")
 
 
 @dataclass
 class QueueEntry:
     task_id: str
-    task: object  # CircuitTask, TestTask, ControlTask
+    task: object  # Any of: CircuitTask, TestTask, ControlTask
     timestamp: datetime
     user: str
     context_id: Optional[str] = None
@@ -29,22 +29,13 @@ class QueueEntry:
 
 
 class QPUTaskQueue:
-    """Thread-safe synchronous task queue with optional async context handling."""
-
     def __init__(self):
         self._queue: deque[QueueEntry] = deque()
         self._context_locks: Dict[str, bool] = defaultdict(lambda: False)
+        logger.info("Initialized task queue")
 
-    # -----------------------------
-    # Main synchronous operations
-    # -----------------------------
-
-    def enqueue(self, task: TaskBase, user: str, context_id: Optional[str] = None,
-                priority: int = 0) -> QueueEntry:
-        """Synchronously enqueue a new task."""
-        #with self._lock:
-        print(f"[QPUTaskQueue] Enqueueing task {task.task_id} (type: {task.type}) by user {user}")
-
+    def enqueue(self, task: TaskBase, user: str, context_id: Optional[str] = None, priority: int = 0) -> QueueEntry:
+        logger.info(f"Enqueueing task {task.task_id} (type: {task.type}) by user {user}")
         entry = QueueEntry(
             task_id=task.task_id,
             task=task,
@@ -54,70 +45,69 @@ class QPUTaskQueue:
             priority=priority
         )
 
-        # Context lock registration
-        if getattr(task, "execution_context", None):
+        if task.execution_context:
             ctx_id = task.execution_context.token_id
             if ctx_id and not self._context_locks[ctx_id]:
                 self._context_locks[ctx_id] = True
+                logger.debug(f"Locked context {ctx_id} for task {task.task_id}")
 
         self._queue.append(entry)
         return entry
 
     def dequeue(self) -> Optional[QueueEntry]:
-        """Remove and return the highest-priority (or earliest) task."""
-        #with self._lock:
         if not self._queue:
+            logger.debug("Dequeue attempted on empty queue")
             return None
 
-        best_entry = min(self._queue, key=lambda e: (-e.priority, e.timestamp))
+        best_entry = min(self._queue, key=lambda entry: (-entry.priority, entry.timestamp))
         self._queue.remove(best_entry)
+        logger.info(f"Dequeued task {best_entry.task_id} (type: {best_entry.task.type})")
         return best_entry
 
-    def peek(self) -> Optional[QueueEntry]:
-        """Return (but do not remove) the next task in queue."""
-        #with self._lock:
-        if not self._queue:
-            return None
-
-        return min(self._queue, key=lambda e: (-e.priority, e.timestamp))
-
-    def remove(self, task_id: str) -> bool:
-        """Remove a specific task from the queue by ID."""
-        #with self._lock:
-        for i, entry in enumerate(self._queue):
-            if entry.task_id == task_id:
-                del self._queue[i]
-                return True
-
-        return False
-
-    def list_pending(self) -> List[QueueEntry]:
-        """List all pending tasks."""
-        #with self._lock:
-        return list(self._queue)
-
-    def clear(self):
-        """Remove all tasks from the queue."""
-        #with self._lock:
-        self._queue.clear()
-
-    def dequeue_all_for_context(self, context: QPUExecutionContext) -> List[TaskBase]:
+    def dequeue_all_for_context(self, context: QPUExecutionContext) -> List[QueueEntry]:
         ctx_id = context.token_id
         matching_entries = [entry for entry in self._queue
                             if entry.task.execution_context and entry.context_id == ctx_id]
-        self._queue = deque([task for task in self._queue if task not in matching_entries])
+        self._queue = deque([entry for entry in self._queue if entry not in matching_entries])
 
-        print(f"[QPUTaskQueue] Dequeued {len(matching_entries)} task(s) for context {ctx_id}")
-
+        logger.info(f"Dequeued {len(matching_entries)} task(s) for context {ctx_id}")
         return matching_entries
 
     def is_locked(self, context: QPUExecutionContext) -> bool:
-        """Check whether a context is currently locked."""
-        return self._context_locks.get(context.token_id, False)
+        locked = self._context_locks.get(context.token_id, False)
+        logger.debug(f"Context {context.token_id} locked: {locked}")
+        return locked
 
     def unlock_context(self, context: QPUExecutionContext):
-        """Release a context lock after batch execution."""
         ctx_id = context.token_id
         if ctx_id in self._context_locks:
             self._context_locks[ctx_id] = False
-            print(f"[QPUTaskQueue] Unlocked context: {ctx_id}")
+            logger.info(f"Unlocked context: {ctx_id}")
+
+    def peek(self) -> Optional[QueueEntry]:
+        if not self._queue:
+            logger.debug("Peek attempted on empty queue")
+            return None
+
+        top = min(self._queue, key=lambda entry: (-entry.priority, entry.timestamp))
+        logger.debug(f"Peeked task {top.task_id} (type: {top.task.type})")
+        return top
+
+    def remove(self, task_id: str) -> bool:
+        for i, entry in enumerate(self._queue):
+            if entry.task_id == task_id:
+                del self._queue[i]
+                logger.info(f"Removed task {task_id} from queue")
+                return True
+
+        logger.warning(f"Attempted to remove non-existent task {task_id}")
+        return False
+
+    def list_pending(self) -> List[QueueEntry]:
+        logger.debug(f"Listing {len(self._queue)} pending task(s)")
+        return list(self._queue)
+
+    def clear(self):
+        size = len(self._queue)
+        self._queue.clear()
+        logger.info(f"Cleared queue (removed {size} task(s))")

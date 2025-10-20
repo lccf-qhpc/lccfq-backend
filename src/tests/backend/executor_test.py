@@ -3,8 +3,7 @@ from lccfq_backend.backend.executor import QPUExecutor
 from lccfq_backend.model.tasks import CircuitTask, TestTask, ControlTask, TaskType, Gate
 from lccfq_backend.backend.error import UnknownQPUTaskType
 
-@pytest.mark.asyncio
-async def test_execute_circuit_task():
+def test_execute_circuit_task():
     executor = QPUExecutor()
     task = CircuitTask(
         task_id="circuit-001",
@@ -17,8 +16,7 @@ async def test_execute_circuit_task():
     assert result is None or result.task_id == task.task_id
 
 
-@pytest.mark.asyncio
-async def test_execute_test_task():
+def test_execute_test_task():
     executor = QPUExecutor()
     task = TestTask(
         task_id="test-001",
@@ -33,8 +31,7 @@ async def test_execute_test_task():
     assert result is None or result.task_id == task.task_id
 
 
-@pytest.mark.asyncio
-async def test_execute_control_reset():
+def test_execute_control_reset():
     executor = QPUExecutor()
     task = ControlTask(
         task_id="control-001",
@@ -46,8 +43,7 @@ async def test_execute_control_reset():
     assert result is None or result.status in ["ok", "error", "warning"]
 
 
-@pytest.mark.asyncio
-async def test_execute_control_unknown_command():
+def test_execute_control_unknown_command():
     executor = QPUExecutor()
     task = ControlTask(
         task_id="control-003",
@@ -60,8 +56,7 @@ async def test_execute_control_unknown_command():
         assert result.status == "error"
 
 
-@pytest.mark.asyncio
-async def test_execute_unknown_task_type():
+def test_execute_unknown_task_type():
     executor = QPUExecutor()
 
     class FakeTask:
@@ -70,4 +65,4 @@ async def test_execute_unknown_task_type():
             self.type = "nonsense"
 
     with pytest.raises(UnknownQPUTaskType):
-        await executor.execute(FakeTask(), user="eve")
+        executor.execute(FakeTask(), user="eve")

@@ -5,6 +5,10 @@ description = "LCCFQ Backend Service"
 authors = [{name = "Santiago Nunez-Corrales", email = "nunezco2@illinois.edu"}]
 requires-python = ">=3.12"
 readme = "README.md"
+dependencies = [
+    "pydantic>=2.12.3",
+    "pytest>=8.4.2",
+]
 
 [build-system]
 requires = ["setuptools>=61"]
