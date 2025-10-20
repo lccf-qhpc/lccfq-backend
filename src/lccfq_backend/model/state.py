@@ -1,5 +1,5 @@
 """
-Filename: qpu_state.py
+Filename: state.py
 Author: Santiago Nunez-Corrales
 Date: 2025-08-06
 Version: 1.0

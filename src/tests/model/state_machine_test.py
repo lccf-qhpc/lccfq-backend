@@ -11,7 +11,7 @@ Contact: nunezco2@illinois.edu
 """
 import pytest
 from lccfq_backend.backend.fsm import QPUAbstraction, QPUEvent
-from lccfq_backend.model.qpu_state import QPUState
+from lccfq_backend.model.state import QPUState
 
 
 @pytest.fixture

@@ -11,7 +11,7 @@ Contact: nunezco2@illinois.edu
 """
 from enum import Enum
 from typing import Optional
-from ..model.qpu_state import QPUState
+from ..model.state import QPUState
 from .error import UnknownQPUState
 
 

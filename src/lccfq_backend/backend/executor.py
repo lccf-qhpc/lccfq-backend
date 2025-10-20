@@ -16,8 +16,9 @@ from ..model.results import CircuitResult, TestResult, ControlAck, TaskResult
 from .queue import QPUTaskQueue, QueueEntry
 from .fsm import QPUAbstraction, QPUEvent, QPUState
 from .error import UnknownQPUTaskType, QPUQueueEmpty
-from .hwman_client import HWManClient, HWManStatus
+from .hwman import HWManClient, HWManStatus
 from ..logging.logger import setup_logger
+
 
 logger = setup_logger("QPUExecutor")
 
@@ -28,7 +29,23 @@ class QPUExecutor:
         self.qpu = QPUAbstraction()
         self.hwman = HWManClient()
         self.queue = QPUTaskQueue()
+
         logger.info("QPUExecutor initialized")
+
+    def is_qpu_online(self) -> bool:
+        try:
+            with open("/tmp/qpu_status.flag", "r") as f:
+                status = f.read().strip()
+                if status == "online":
+                    if self.qpu.state != QPUState.BUSY:
+                        self.qpu.state = QPUState.IDLE
+                    return True
+                else:
+                    self.qpu.state = QPUState.UNRESPONSIVE
+                    return False
+        except FileNotFoundError:
+            self.qpu.state = QPUState.UNRESPONSIVE
+            return False
 
     def execute(self, task: TaskBase, user: str, context_id: Optional[str] = None, priority: int = 0) -> Optional[TaskResult]:
         if task.type not in TaskType:

@@ -9,7 +9,7 @@ Description:
 License: Apache 2.0
 Contact: nunezco2@illinois.edu
 """
-from lccfq_backend.backend.hwman_client import HWManClient
+from lccfq_backend.backend.hwman import HWManClient
 from lccfq_backend.model.tasks import Gate
 
 

@@ -10,7 +10,7 @@ License: Apache 2.0
 import pytest
 
 from lccfq_backend.backend.fsm import QPUAbstraction, QPUEvent
-from lccfq_backend.model.qpu_state import QPUState
+from lccfq_backend.model.state import QPUState
 from lccfq_backend.backend.error import UnknownQPUState
 
 
