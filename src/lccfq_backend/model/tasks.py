@@ -17,7 +17,7 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Dict, Optional, Literal
 from pydantic import BaseModel, Field, ConfigDict
-
+from .context import QPUExecutionContext
 
 class TaskType(str, Enum):
     """Task types LCCFQ backed admits
@@ -62,6 +62,7 @@ class TaskBase(BaseModel, ABC):
     timestamp: str = Field(default_factory=current_timestamp)
     tags: Dict[str, str] = Field(default_factory=dict)
     type: TaskType
+    execution_context: Optional[QPUExecutionContext] = None
     model_config = ConfigDict(use_enum_values=True)
 
 

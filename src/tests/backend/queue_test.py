@@ -1,56 +1,98 @@
 import pytest
+from datetime import datetime
 from lccfq_backend.backend.queue import QPUTaskQueue, QueueEntry
+from lccfq_backend.model.tasks import CircuitTask, TaskType, Gate
+from lccfq_backend.model.context import QPUExecutionContext
 
-# Updated DummyTask with a realistic interface
-class DummyTask:
-    def __init__(self, name: str):
-        self.name = name
-        self.task_id = f"dummy-{name}"
 
-    def __repr__(self):
-        return f"<DummyTask {self.name}>"
+def make_task(task_id: str, ctx_id: str = None) -> CircuitTask:
+    task = CircuitTask(
+        task_id=task_id,
+        type=TaskType.CIRCUIT,
+        gates=[Gate(symbol="rx", target_qubits=[0], control_qubits=[], params=[])],
+        shots=1000
+    )
+    if ctx_id:
+        task.execution_context = QPUExecutionContext(token_id=ctx_id, user_id="tim")
+    return task
 
-@pytest.fixture
-def queue():
-    return QPUTaskQueue()
 
-def test_enqueue_and_dequeue(queue):
-    task = DummyTask("task1")
-    tid = queue.enqueue(task, user="alice")
-    assert isinstance(tid, QueueEntry)
-    entry = queue.dequeue()
-    assert isinstance(entry, QueueEntry)
-    assert isinstance(entry.task, DummyTask)
-    assert entry.task.name == "task1"
-    assert entry.user == "alice"
+def test_enqueue_and_dequeue():
+    queue = QPUTaskQueue()
+    task = make_task("t1")
+    entry = queue.enqueue(task, user="alice", priority=2)
+    assert entry.task_id == "t1"
 
-def test_peek(queue):
-    queue.enqueue(DummyTask("t1"), "u1")
-    queue.enqueue(DummyTask("t2"), "u2")
-    peeked = queue.peek()
-    assert peeked is not None
-    assert isinstance(peeked.task, DummyTask)
-    assert peeked.task.name == "t1"
-    assert peeked.user == "u1"
+    dequeued = queue.dequeue()
+    assert dequeued is not None
+    assert dequeued.task.task_id == "t1"
 
-def test_remove_task(queue):
-    entry = queue.enqueue(DummyTask("t1"), "u1")
-    found = queue.remove(entry.task_id)
-    assert found is True
-    assert queue.dequeue() is None
 
-def test_list_pending(queue):
-    queue.enqueue(DummyTask("t1"), "u1")
-    queue.enqueue(DummyTask("t2"), "u2")
-    pending = queue.list_pending()
-    assert len(pending) == 2
-    assert pending[0].user == "u1"
-    assert pending[1].user == "u2"
-    assert pending[0].task.name == "t1"
-    assert pending[1].task.name == "t2"
+def test_peek():
+    queue = QPUTaskQueue()
+    task1 = make_task("t1")
+    task2 = make_task("t2")
+    queue.enqueue(task1, user="bob", priority=1)
+    queue.enqueue(task2, user="bob", priority=2)
 
-def test_clear(queue):
-    queue.enqueue(DummyTask("t1"), "u1")
-    queue.enqueue(DummyTask("t2"), "u2")
-    queue.clear()
-    assert queue.list_pending() == []
+    top = queue.peek()
+    assert top is not None
+    assert top.task.task_id == "t2"  # higher priority
+
+
+def test_remove_task():
+    queue = QPUTaskQueue()
+    task = make_task("t-remove")
+    queue.enqueue(task, user="alice")
+    removed = queue.remove("t-remove")
+    assert removed is True
+    assert queue.peek() is None
+
+
+def test_list_pending():
+    queue = QPUTaskQueue()
+    queue.enqueue(make_task("a"), user="x")
+    queue.enqueue(make_task("b"), user="x")
+    assert len(queue.list_pending()) == 2
+
+
+def test_priority_ordering():
+    queue = QPUTaskQueue()
+    task1 = make_task("low")
+    task2 = make_task("high")
+    queue.enqueue(task1, user="a", priority=1)
+    queue.enqueue(task2, user="b", priority=5)
+
+    dequeued = queue.dequeue()
+    assert dequeued is not None
+    assert dequeued.task.task_id == "high"
+
+
+def test_context_locking_and_unlock():
+    queue = QPUTaskQueue()
+    ctx = QPUExecutionContext(token_id="CTX1", user_id="bob")
+    task = make_task("t1", ctx_id="CTX1")
+    queue.enqueue(task, user="alice")
+
+    assert queue.is_locked(ctx) is True
+    queue.unlock_context(ctx)
+    assert queue.is_locked(ctx) is False
+
+
+def test_dequeue_all_for_context():
+    queue = QPUTaskQueue()
+    ctx = QPUExecutionContext(token_id="CTX1", user_id="alice")
+
+    task1 = make_task("a", ctx_id="CTX1")
+    task2 = make_task("b", ctx_id="CTX1")
+    task3 = make_task("c")  # unrelated
+
+    queue.enqueue(task1, user="alice", context_id="CTX1")
+    queue.enqueue(task2, user="alice", context_id="CTX1")
+    queue.enqueue(task3, user="bob", context_id=None)
+
+    entries = queue.dequeue_all_for_context(ctx)
+    assert len(entries) == 2
+    task_ids = [entry.task.task_id for entry in entries]
+    assert "a" in task_ids
+    assert "b" in task_ids
