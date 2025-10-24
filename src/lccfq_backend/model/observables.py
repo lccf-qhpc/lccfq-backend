@@ -55,3 +55,7 @@ class QPUObservables(BaseModel):
                          f"Depth={obs.max_circuit_depth}")
 
         return "\n".join(lines)
+
+    def slurm_export(self) -> str:
+        """Export SLURM-readable node features."""
+        return generate_slurm_features(self)

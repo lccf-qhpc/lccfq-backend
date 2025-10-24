@@ -11,7 +11,8 @@ import time
 import threading
 from multiprocessing import Event
 from ..logging.logger import setup_logger
-from lccfq_backend.backend.hwman import HWManClient
+from ..backend.hwman import HWManClient
+from ..slurm.exporter import export_observables
 
 logger = setup_logger("lccfq_backend.daemon.watchdog")
 
@@ -59,6 +60,14 @@ class QPUWatchdog:
             alive = self.check_hardware()
             self.write_status(alive)
             logger.info(f"[Watchdog] QPU status: {'online' if alive else 'offline'}")
+
+            if alive:
+                try:
+                    observables = self.hwman.get_observables()
+                    export_observables(observables)
+                except Exception as e:
+                    logger.warning(f"[Watchdog] Could not export observables: {e}")
+
             time.sleep(self.interval)
 
     def stop(self):
@@ -66,7 +75,6 @@ class QPUWatchdog:
         logger.info("[Watchdog] Watchdog stop requested.")
         self.stop_event.set()
         self.write_status(False)
-
 
 def start_watchdog(interval: int = 300) -> QPUWatchdog:
     """

@@ -9,12 +9,10 @@ Description:
 License: Apache 2.0
 Contact: nunezco2@illinois.edu
 """
-import logging
 from enum import Enum
 from typing import List, Dict, Tuple, Optional
 from ..model.tasks import Gate
-from ..model.state import QPUState
-from ..model.observables import QubitObservable
+from ..model.observables import QubitObservable, QPUObservables
 from ..logging.logger import setup_logger
 
 log = setup_logger("lccfq_backend.backend.hwman_client")
@@ -48,6 +46,31 @@ class HWManClient:
             "fidelity": 0.982,
             "xeb_fit": 0.975
         }
+
+    def get_observables(self) -> QPUObservables:
+        """
+        Return latest observable values for all qubits.
+
+        :return: QPUObservables object with per-qubit metrics
+        """
+        log.info("Querying observables from QPU.")
+        observables = {
+            i: QubitObservable(
+                t1=30.0 + i,
+                t2=25.0 + i,
+                anharmonicity=-0.3,
+                frequency=4.9 + i * 0.01,
+                gate_fidelity_1q=0.982,
+                gate_fidelity_2q=0.973,
+                rx_duration=20.0,
+                ry_duration=20.0,
+                sqrt_iswap_duration=40.0,
+                reset_duration=5.0,
+                measurement_duration=12.0,
+                max_circuit_depth=2000 - i * 100
+            ) for i in range(5)
+        }
+        return QPUObservables(qubits=observables)
 
     def retune(self) -> Tuple[HWManStatus, Optional[str], Optional[Dict[int, QubitObservable]]]:
         log.info("Retuning QPU.")

@@ -26,7 +26,7 @@ def test_watchdog_check_and_write(monkeypatch):
             def fake_sleep(_): watchdog.stop_event.set()
 
             with patch("time.sleep", fake_sleep):
-                watchdog.start()
+                watchdog.run()
 
             # Assert that the status was written correctly
             with open(status_file, "r") as f:
