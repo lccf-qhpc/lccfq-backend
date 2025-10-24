@@ -7,37 +7,33 @@ Description:
 
 License: Apache 2.0
 """
-
 import time
-import signal
-import logging
-from multiprocessing import Process, Event
+import threading
+from multiprocessing import Event
+from ..logging.logger import setup_logger
+from lccfq_backend.backend.hwman import HWManClient
 
-from lccfq_backend.backend.hwman import HWManClient, HWManStatus
+logger = setup_logger("lccfq_backend.daemon.watchdog")
 
-log = logging.getLogger("lccfq_backend.daemon.watchdog")
-log.setLevel(logging.INFO)
 
 class QPUWatchdog:
     """Watchdog to check QPU health and availability periodically."""
 
     def __init__(self, interval: int = 300):
-        """We check every 5 minutes for QPU availability.
-        """
         self.interval = interval
         self.hwman = HWManClient()
         self.stop_event = Event()
-        self.status_file = "/tmp/qpu_status.flag"  # Can be read by SLURM wrapper
+        self.status_file = "/tmp/qpu_status.flag"  # Readable by SLURM or systemd unit
 
     def is_qpu_online(self) -> bool:
         try:
-            with open("/tmp/qpu_status.flag", "r") as f:
+            with open(self.status_file, "r") as f:
                 return f.read().strip() == "online"
         except FileNotFoundError:
-            self.logger.warning("QPU status file not found.")
+            logger.warning("QPU status file not found.")
             return False
         except Exception as e:
-            self.logger.error(f"Error checking QPU status: {e}")
+            logger.error(f"Error checking QPU status: {e}")
             return False
 
     def check_hardware(self) -> bool:
@@ -45,31 +41,49 @@ class QPUWatchdog:
         try:
             return self.hwman.ping()
         except Exception as e:
-            log.error(f"[Watchdog] Hardware ping failed: {e}")
+            logger.error(f"[Watchdog] Hardware ping failed: {e}")
             return False
 
     def write_status(self, alive: bool):
-        """Writes status to a file SLURM can query."""
-        with open(self.status_file, "w") as f:
-            f.write("online\n" if alive else "offline\n")
+        """Writes status to a file SLURM/systemd can query."""
+        try:
+            with open(self.status_file, "w") as f:
+                f.write("online\n" if alive else "offline\n")
+        except Exception as e:
+            logger.error(f"Could not write to status file: {e}")
 
-    def start(self):
-        """Start watchdog monitoring loop."""
-        log.info("[Watchdog] Starting QPU watchdog.")
-        signal.signal(signal.SIGTERM, self._handle_exit)
-        signal.signal(signal.SIGINT, self._handle_exit)
-
+    def run(self):
+        """Main loop for the watchdog."""
+        logger.info("[Watchdog] Starting watchdog main loop.")
         while not self.stop_event.is_set():
             alive = self.check_hardware()
             self.write_status(alive)
-            log.info(f"[Watchdog] QPU status: {'online' if alive else 'offline'}")
+            logger.info(f"[Watchdog] QPU status: {'online' if alive else 'offline'}")
             time.sleep(self.interval)
 
-    def _handle_exit(self, signum, frame):
-        log.info(f"[Watchdog] Stopping QPU watchdog (signal {signum})")
+    def stop(self):
+        """External stop signal handler."""
+        logger.info("[Watchdog] Watchdog stop requested.")
         self.stop_event.set()
         self.write_status(False)
 
-def start_watchdog(interval: int = 5):
+
+def start_watchdog(interval: int = 300) -> QPUWatchdog:
+    """
+    Starts the watchdog in a background thread.
+    Returns the watchdog instance so it can be stopped externally.
+    This function should only be called from the main thread.
+    """
+    logger.info(f"[Watchdog] Preparing to start watchdog thread with interval = {interval} sec.")
+
     watchdog = QPUWatchdog(interval=interval)
-    watchdog.run()
+
+    try:
+        thread = threading.Thread(target=watchdog.run, daemon=True)
+        thread.start()
+        logger.info(f"[Watchdog] Watchdog thread started successfully (daemon = True).")
+    except Exception as e:
+        logger.exception(f"[Watchdog] Failed to start watchdog thread: {e}")
+        raise
+
+    return watchdog

@@ -9,7 +9,6 @@ Description:
 License: Apache 2.0
 Contact: nunezco2@illinois.edu
 """
-
 from typing import Union, Optional, List
 from ..model.tasks import CircuitTask, TestTask, ControlTask, TaskType, TaskBase
 from ..model.results import CircuitResult, TestResult, ControlAck, TaskResult
@@ -85,7 +84,7 @@ class QPUExecutor:
     def _execute_next(self) -> Optional[Union[CircuitResult, TestResult, ControlAck, List[Union[CircuitResult, TestResult, ControlAck]]]]:
         entry = self.queue.dequeue()
         if not entry:
-            raise QPUQueueEmpty("No pending tasks in the queue.")
+            raise QPUQueueEmpty()
 
         context_id = entry.context_id
 
@@ -125,6 +124,7 @@ class QPUExecutor:
     def _handle_deferred_tasks(self):
         while self.qpu.state == QPUState.IDLE:
             entry = self.queue.dequeue()
+
             if not entry:
                 break
 
