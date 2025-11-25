@@ -13,7 +13,7 @@ from enum import Enum
 from typing import List, Dict, Tuple, Optional
 from ..model.tasks import Gate
 from ..model.observables import QubitObservable, QPUObservables
-from ..logging.logger import setup_logger
+from lccfq_backend.utils.log import setup_logger
 
 log = setup_logger("lccfq_backend.backend.hwman_client")
 

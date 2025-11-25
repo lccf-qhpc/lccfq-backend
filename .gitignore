@@ -8,3 +8,11 @@ __pycache__/
 *.iml
 *.idea
 dist/
+
+.idea
+.claude
+*.egg-info/
+
+.DS_Store
+*.crt
+*.key

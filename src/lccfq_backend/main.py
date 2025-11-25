@@ -24,9 +24,10 @@ import time
 import signal
 import threading
 
-from .backend.executor import QPUExecutor, QPUQueueEmpty
-from .daemon.watchdog import start_watchdog
-from .logging.logger import setup_logger
+from lccfq_backend.backend.executor import QPUExecutor, QPUQueueEmpty
+from lccfq_backend.daemon.watchdog import start_watchdog
+from lccfq_backend.api.grpc_server import GRPCServer
+from lccfq_backend.utils.log import setup_logger
 
 logger = setup_logger("LCCFQBackendMain")
 
@@ -41,10 +42,9 @@ def handle_signal(signum, frame):
     shutdown_flag = True
 
 
-def start_loop(poll_interval: int = 10):
+def start_loop(executor: QPUExecutor, poll_interval: int = 10):
     """Start the backend service loop that monitors and executes QPU tasks."""
     logger.info("[Main] Starting LCCFQ backend main loop.")
-    executor = QPUExecutor()
 
     while not shutdown_flag:
         try:
@@ -63,8 +63,8 @@ def start_loop(poll_interval: int = 10):
 
     logger.info("[Main] Backend service stopped gracefully.")
 
-def main(with_watchdog: bool = True, watchdog_interval: int = 300):
-    """Starts the backend with optional watchdog background thread."""
+def main(with_watchdog: bool = True, watchdog_interval: int = 300, with_grpc: bool = True, grpc_port: int = 50052):
+    """Starts the backend with optional watchdog background thread and gRPC server."""
     global shutdown_flag
 
     logger.info("[Main] Initializing LCCFQ backend service.")
@@ -72,6 +72,18 @@ def main(with_watchdog: bool = True, watchdog_interval: int = 300):
     # Set signal handlers from main thread only
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
+
+    # Create executor instance (shared between main loop and gRPC server)
+    executor = QPUExecutor()
+
+    # Start gRPC server in background thread if enabled
+    grpc_server = None
+    grpc_server_thread = None
+    if with_grpc:
+        logger.info("[Main] Launching gRPC server thread.")
+        grpc_server = GRPCServer(executor, port=grpc_port)
+        grpc_server_thread = threading.Thread(target=grpc_server.serve, daemon=True)
+        grpc_server_thread.start()
 
     # Start watchdog in background thread if enabled
     if with_watchdog:
@@ -81,11 +93,14 @@ def main(with_watchdog: bool = True, watchdog_interval: int = 300):
         watchdog = None
 
     try:
-        start_loop()
+        start_loop(executor)
     finally:
         if watchdog:
             logger.info("[Main] Stopping watchdog thread.")
             watchdog.stop()
+        if grpc_server:
+            logger.info("[Main] Stopping gRPC server.")
+            grpc_server.cleanup()
 
 
 if __name__ == "__main__":

@@ -10,6 +10,9 @@ dependencies = [
     "pytest>=8.4.2",
     "pytest-timeout>=2.4.0",
     "typer>=0.20.0",
+    "grpcio>=1.66.0",
+    "grpcio-tools>=1.66.0",
+    "cryptography>=43.0.0",
 ]
 
 [build-system]

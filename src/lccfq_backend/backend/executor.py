@@ -16,7 +16,7 @@ from .queue import QPUTaskQueue, QueueEntry
 from .fsm import QPUAbstraction, QPUEvent, QPUState
 from .error import UnknownQPUTaskType, QPUQueueEmpty
 from .hwman import HWManClient, HWManStatus
-from ..logging.logger import setup_logger
+from lccfq_backend.utils.log import setup_logger
 
 
 logger = setup_logger("QPUExecutor")

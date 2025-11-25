@@ -10,7 +10,7 @@ License: Apache 2.0
 import time
 import threading
 from multiprocessing import Event
-from ..logging.logger import setup_logger
+from lccfq_backend.utils.log import setup_logger
 from ..backend.hwman import HWManClient
 from ..slurm.exporter import export_observables
 
