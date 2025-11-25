@@ -10,7 +10,7 @@ import grpc
 from lccfq_backend.api.protobufs_compiled import qpu_service_pb2_grpc
 from lccfq_backend.api.services.executor_service import ExecutorService
 from lccfq_backend.backend.executor import QPUExecutor
-from lccfq_backend.certificates.certificate_manager import CertificateManager
+from lccfq_backend.api.certificates import CertificateManager
 from lccfq_backend.utils.log import setup_logger
 
 logger = setup_logger("GRPCServer")
