@@ -9,8 +9,12 @@ from lccfq_backend.api.protobufs_compiled.qpu_service_pb2_grpc import QPUExecuto
 from lccfq_backend.api.protobufs_compiled.qpu_service_pb2 import (
     ExecutorRequest,
     ExecutorResponse,
+    SubmitCircuitTaskRequest,
+    SubmitCircuitTaskResponse,
 )
 from lccfq_backend.backend.executor import QPUExecutor
+from lccfq_backend.model.tasks import CircuitTask, Gate
+from lccfq_backend.backend.error import UnknownQPUTaskType
 from lccfq_backend.utils.log import setup_logger
 
 logger = setup_logger("ExecutorService")
@@ -46,3 +50,125 @@ class ExecutorService(QPUExecutorServicer):
             success=True
         )
         return response
+
+    def SubmitCircuitTask(
+        self,
+        request: SubmitCircuitTaskRequest,
+        context: grpc.ServicerContext
+    ) -> SubmitCircuitTaskResponse:
+        """
+        Handle circuit task submission from gRPC client.
+
+        Args:
+            request: SubmitCircuitTaskRequest with gates and shots
+            context: gRPC service context (contains client certificate metadata)
+
+        Returns:
+            SubmitCircuitTaskResponse with task_id and status
+        """
+        try:
+            # Extract user ID from client certificate
+            user_id = self._extract_user_from_context(context)
+            logger.info(f"Received circuit task submission from user: {user_id}")
+
+            # Convert proto Gates to Python Gate objects
+            gates = [
+                Gate(
+                    symbol=g.symbol,
+                    target_qubits=list(g.target_qubits),
+                    control_qubits=list(g.control_qubits),
+                    params=list(g.params),
+                )
+                for g in request.gates
+            ]
+
+            # Validate shots is positive
+            if request.shots <= 0:
+                logger.error(f"Invalid shots value: {request.shots}")
+                return SubmitCircuitTaskResponse(
+                    task_id="",
+                    success=False,
+                    message=f"Invalid shots value: {request.shots}. Must be positive."
+                )
+
+            # Create CircuitTask (auto-generates task_id via UUID)
+            circuit_task = CircuitTask(
+                gates=gates,
+                shots=request.shots,
+            )
+
+            # Enqueue task directly in queue (async - don't execute immediately)
+            # Using default priority=0 and no context_id for simplicity
+            # NOTE: We call queue.enqueue() directly instead of executor.execute()
+            # because execute() would immediately dispatch if QPU is idle,
+            # but we want async behavior - just enqueue and let main loop handle execution
+            self.executor.queue.enqueue(
+                task=circuit_task,
+                user=user_id,
+                context_id=None,
+                priority=0
+            )
+
+            logger.info(f"Circuit task enqueued: {circuit_task.task_id} for user {user_id}")
+
+            return SubmitCircuitTaskResponse(
+                task_id=circuit_task.task_id,
+                success=True,
+                message=f"Task {circuit_task.task_id} enqueued successfully"
+            )
+
+        except UnknownQPUTaskType as e:
+            logger.error(f"Invalid task type: {e}")
+            return SubmitCircuitTaskResponse(
+                task_id="",
+                success=False,
+                message=f"Task submission failed: {str(e)}"
+            )
+        except Exception as e:
+            logger.error(f"Error submitting circuit task: {e}", exc_info=True)
+            return SubmitCircuitTaskResponse(
+                task_id="",
+                success=False,
+                message=f"Internal error: {str(e)}"
+            )
+
+    def _extract_user_from_context(self, context: grpc.ServicerContext) -> str:
+        """
+        Extract user ID from the client's mTLS certificate.
+
+        The client certificate's Common Name (CN) contains the user ID.
+
+        Args:
+            context: gRPC service context
+
+        Returns:
+            User ID string from certificate CN
+
+        Raises:
+            ValueError: If certificate or CN is missing
+        """
+        # Get authentication context
+        auth_context = context.auth_context()
+
+        # Extract the peer identity (certificate subject)
+        # auth_context keys are strings, values are lists of bytes
+        # e.g., {'x509_common_name': [b'user_id']}
+        user_id = None
+        for key, values in auth_context.items():
+            if key == 'x509_common_name':
+                # values is a list, get the first element and decode
+                if isinstance(values, list) and len(values) > 0:
+                    value = values[0]
+                    if isinstance(value, bytes):
+                        user_id = value.decode('utf-8')
+                    else:
+                        user_id = str(value)
+                    break
+
+        if not user_id:
+            logger.error(f"No client certificate CN found in auth context")
+            raise ValueError("Client certificate missing or invalid")
+
+        logger.debug(f"Extracted user_id from certificate: {user_id}")
+
+        return user_id

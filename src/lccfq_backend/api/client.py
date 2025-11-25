@@ -5,7 +5,14 @@ import grpc
 from lccfq_backend.api.certificates.certificate_manager import CertificateManager
 from lccfq_backend.utils.log import setup_logger
 from lccfq_backend.api.protobufs_compiled.qpu_service_pb2_grpc import QPUExecutorStub
-from lccfq_backend.api.protobufs_compiled.qpu_service_pb2 import ExecutorResponse, ExecutorRequest
+from lccfq_backend.api.protobufs_compiled.qpu_service_pb2 import (
+    ExecutorResponse,
+    ExecutorRequest,
+    SubmitCircuitTaskRequest,
+    SubmitCircuitTaskResponse,
+    Gate as ProtoGate,
+)
+from lccfq_backend.model.tasks import Gate
 
 logger = setup_logger("GRPCServer")
 
@@ -100,4 +107,58 @@ class Client:
             return response
         except grpc.RpcError as e:
             logger.error(f"gRPC error during Ping")
+            raise e
+
+    def submit_circuit_task(
+        self,
+        gates: list[Gate],
+        shots: int
+    ) -> SubmitCircuitTaskResponse:
+        """
+        Submit a circuit task to the QPU executor.
+
+        Args:
+            gates: List of Gate objects defining the quantum circuit
+            shots: Number of measurement shots to perform
+
+        Returns:
+            SubmitCircuitTaskResponse with task_id and status
+
+        Raises:
+            grpc.RpcError: If the RPC call fails
+            AssertionError: If executor_stub is not initialized
+        """
+        try:
+            assert self.executor_stub is not None, "Executor stub is not initialized."
+
+            # Convert Python Gate objects to proto Gates
+            proto_gates = [
+                ProtoGate(
+                    symbol=g.symbol,
+                    target_qubits=g.target_qubits,
+                    control_qubits=g.control_qubits,
+                    params=g.params,
+                )
+                for g in gates
+            ]
+
+            # Create request
+            request = SubmitCircuitTaskRequest(
+                gates=proto_gates,
+                shots=shots
+            )
+
+            # Make RPC call
+            logger.info(f"Submitting circuit task with {len(gates)} gates, {shots} shots")
+            response = self.executor_stub.SubmitCircuitTask(request)
+
+            if response.success:
+                logger.info(f"Circuit task submitted successfully: {response.task_id}")
+            else:
+                logger.error(f"Circuit task submission failed: {response.message}")
+
+            return response
+
+        except grpc.RpcError as e:
+            logger.error(f"gRPC error during SubmitCircuitTask: {e.code()} - {e.details()}")
             raise e

@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n.src/lccfq_backend/api/protos/qpu_service.proto\"\"\n\x0f\x45xecutorRequest\x12\x0f\n\x07message\x18\x01 \x01(\t\"4\n\x10\x45xecutorResponse\x12\x0f\n\x07message\x18\x01 \x01(\t\x12\x0f\n\x07success\x18\x02 \x01(\x08\x32:\n\x0bQPUExecutor\x12+\n\x04Ping\x12\x10.ExecutorRequest\x1a\x11.ExecutorResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n.src/lccfq_backend/api/protos/qpu_service.proto\"\"\n\x0f\x45xecutorRequest\x12\x0f\n\x07message\x18\x01 \x01(\t\"4\n\x10\x45xecutorResponse\x12\x0f\n\x07message\x18\x01 \x01(\t\x12\x0f\n\x07success\x18\x02 \x01(\x08\"U\n\x04Gate\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x15\n\rtarget_qubits\x18\x02 \x03(\x05\x12\x16\n\x0e\x63ontrol_qubits\x18\x03 \x03(\x05\x12\x0e\n\x06params\x18\x04 \x03(\x01\"?\n\x18SubmitCircuitTaskRequest\x12\x14\n\x05gates\x18\x01 \x03(\x0b\x32\x05.Gate\x12\r\n\x05shots\x18\x02 \x01(\x05\"N\n\x19SubmitCircuitTaskResponse\x12\x0f\n\x07task_id\x18\x01 \x01(\t\x12\x0f\n\x07success\x18\x02 \x01(\x08\x12\x0f\n\x07message\x18\x03 \x01(\t2\x86\x01\n\x0bQPUExecutor\x12+\n\x04Ping\x12\x10.ExecutorRequest\x1a\x11.ExecutorResponse\x12J\n\x11SubmitCircuitTask\x12\x19.SubmitCircuitTaskRequest\x1a\x1a.SubmitCircuitTaskResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -35,6 +35,12 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_EXECUTORREQUEST']._serialized_end=84
   _globals['_EXECUTORRESPONSE']._serialized_start=86
   _globals['_EXECUTORRESPONSE']._serialized_end=138
-  _globals['_QPUEXECUTOR']._serialized_start=140
-  _globals['_QPUEXECUTOR']._serialized_end=198
+  _globals['_GATE']._serialized_start=140
+  _globals['_GATE']._serialized_end=225
+  _globals['_SUBMITCIRCUITTASKREQUEST']._serialized_start=227
+  _globals['_SUBMITCIRCUITTASKREQUEST']._serialized_end=290
+  _globals['_SUBMITCIRCUITTASKRESPONSE']._serialized_start=292
+  _globals['_SUBMITCIRCUITTASKRESPONSE']._serialized_end=370
+  _globals['_QPUEXECUTOR']._serialized_start=373
+  _globals['_QPUEXECUTOR']._serialized_end=507
 # @@protoc_insertion_point(module_scope)
