@@ -20,13 +20,13 @@ Description:
 License: Apache 2.0
 """
 
-import time
 import signal
 import threading
+import time
 
+from lccfq_backend.api.grpc_server import GRPCServer
 from lccfq_backend.backend.executor import QPUExecutor, QPUQueueEmpty
 from lccfq_backend.daemon.watchdog import start_watchdog
-from lccfq_backend.api.grpc_server import GRPCServer
 from lccfq_backend.utils.log import setup_logger
 
 logger = setup_logger("LCCFQBackendMain")
