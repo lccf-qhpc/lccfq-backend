@@ -8,6 +8,33 @@ LCCFQ Backend is a stateful, queueing backend service that connects an HPC syste
 
 ## Quick Start
 
+### Configuration
+
+The service is configured via a `config.toml` file in the project root. If no config file exists, the service will use default values.
+
+**Create a configuration file:**
+```bash
+cp config.toml my_config.toml
+# Edit my_config.toml with your settings
+```
+
+**Configuration options:**
+- `log_level` - Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+- `with_watchdog` - Enable/disable watchdog daemon
+- `watchdog_interval` - Watchdog check interval in seconds
+- `with_grpc` - Enable/disable gRPC server
+- `grpc_address` - gRPC server bind address
+- `grpc_port` - gRPC server port
+- `grpc_max_workers` - Maximum gRPC worker threads
+- `cert_dir` - Directory for mTLS certificates
+- `hwman_mock_mode` - Use mock hardware manager (true) or real connection (false)
+- `hwman_address` - Hardware manager server address
+- `hwman_port` - Hardware manager server port
+- `hwman_cert_dir` - Directory for hwman client certificates
+- `hwman_client_name` - Client name for hwman authentication
+
+See `config.toml` for default values and detailed comments.
+
 ### Running the Service
 
 ```bash
@@ -16,13 +43,20 @@ python src/lccfq_backend/main.py
 
 This starts:
 1. **Main execution loop** - Polls queue every 10 seconds, executes tasks on QPU
-2. **Watchdog daemon thread** - Checks QPU health every 300 seconds
-3. **gRPC server thread** - Listens on `[::]:{port}` with mTLS (default port 50052)
+2. **Watchdog daemon thread** - Checks QPU health (configurable via `watchdog_interval` in config)
+3. **gRPC server thread** - Listens on configured address:port with mTLS (default `[::]`:50052)
 
-To disable gRPC server:
+All settings are controlled via `config.toml`. To use a custom config file:
+
 ```python
-from lccfq_backend.main import main
-main(with_grpc=False)
+from lccfq_backend.config import BackendSettings
+
+# Load custom config file
+settings = BackendSettings(_toml_file="production_config.toml")
+
+# Access settings
+print(settings.grpc_port)  # 50052
+print(settings.to_dict())  # Get all settings as dict
 ```
 
 ### Development Commands

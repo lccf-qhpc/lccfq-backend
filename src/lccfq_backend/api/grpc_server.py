@@ -25,6 +25,7 @@ class GRPCServer:
         address: str = "[::]",
         port: int = 50052,
         cert_dir: str | Path = "./certs",
+        max_workers: int = 10,
     ):
         """
         Initialize the gRPC Server.
@@ -34,11 +35,13 @@ class GRPCServer:
             address: Address to bind to (default: all interfaces)
             port: Port to listen on (default: 50052)
             cert_dir: Directory containing certificates for mTLS
+            max_workers: Maximum number of gRPC worker threads (default: 10)
         """
         self.executor = executor
         self.address = address
         self.port = port
         self.cert_dir = Path(cert_dir)
+        self.max_workers = max_workers
 
         self.server_cert: bytes | None = None
         self.server_key: bytes | None = None
@@ -47,7 +50,7 @@ class GRPCServer:
         self.executor_service: ExecutorService | None = None
         self.server: grpc.Server | None = None
 
-        logger.info(f"GRPCServer initialized (address: {address}:{port})")
+        logger.info(f"GRPCServer initialized (address: {address}:{port}, max_workers: {max_workers})")
 
     def _initialize_certificates(self) -> None:
         """Initialize mTLS certificates using CertificateManager."""
@@ -102,7 +105,7 @@ class GRPCServer:
             self._initialize_certificates()
 
             # Create server with thread pool
-            self.server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+            self.server = grpc.server(futures.ThreadPoolExecutor(max_workers=self.max_workers))
 
             # Set up mTLS
             server_credentials = grpc.ssl_server_credentials(
