@@ -27,12 +27,9 @@ import time
 
 from lccfq_backend.api.grpc_server import GRPCServer
 from lccfq_backend.backend.executor import QPUExecutor, QPUQueueEmpty
-from lccfq_backend.config import BackendSettings
+from lccfq_backend.config import config
 from lccfq_backend.daemon.watchdog import start_watchdog
 from lccfq_backend.utils.log import setup_logger
-
-# Load configuration
-config = BackendSettings()
 
 # Set up logger with configured log level
 logger = setup_logger("LCCFQBackendMain", level=getattr(logging, config.log_level))

@@ -125,7 +125,7 @@ make protos
 │  │ - Calls hwman.run_circuit/test/control      │ │
 │  └─────────────────────────────────────────────┘ │
 │  ┌─────────────────────────────────────────────┐ │
-│  │ HWManClient (backend/hwman.py)              │ │
+│  │ BaseHWManClient (backend/hwman.py)              │ │
 │  │ - run_circuit(gates, shots) ───────────────────► Physical QPU
 │  │ - run_test(symbol, params, shots)           │ │
 │  │ - retune(), get_observables(), ping()       │ │

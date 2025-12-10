@@ -66,6 +66,10 @@ class BackendSettings(BaseSettings):
         default=Path("./certs"),
         description="Directory containing hwman client certificates",
     )
+    hwman_cert_client_dir: Path = Field(
+        default=Path("./certs/client"),
+        description="Directory containing hwman client TLS certificates",
+    )
     hwman_client_name: str = Field(
         default="backend_client",
         description="Client name for hwman authentication",
@@ -156,3 +160,7 @@ class BackendSettings(BaseSettings):
             Dictionary representation
         """
         return self.model_dump(mode="python")
+
+
+# Singleton config instance - single source of truth for the entire application
+config = BackendSettings()
