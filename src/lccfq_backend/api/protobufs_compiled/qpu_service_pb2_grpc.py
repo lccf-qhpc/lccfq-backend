@@ -44,6 +44,11 @@ class QPUExecutorStub(object):
                 request_serializer=src_dot_lccfq__backend_dot_api_dot_protos_dot_qpu__service__pb2.SubmitCircuitTaskRequest.SerializeToString,
                 response_deserializer=src_dot_lccfq__backend_dot_api_dot_protos_dot_qpu__service__pb2.SubmitCircuitTaskResponse.FromString,
                 _registered_method=True)
+        self.SubmitTestTask = channel.unary_unary(
+                '/QPUExecutor/SubmitTestTask',
+                request_serializer=src_dot_lccfq__backend_dot_api_dot_protos_dot_qpu__service__pb2.SubmitTestTaskRequest.SerializeToString,
+                response_deserializer=src_dot_lccfq__backend_dot_api_dot_protos_dot_qpu__service__pb2.SubmitTestTaskResponse.FromString,
+                _registered_method=True)
 
 
 class QPUExecutorServicer(object):
@@ -61,6 +66,12 @@ class QPUExecutorServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def SubmitTestTask(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_QPUExecutorServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -73,6 +84,11 @@ def add_QPUExecutorServicer_to_server(servicer, server):
                     servicer.SubmitCircuitTask,
                     request_deserializer=src_dot_lccfq__backend_dot_api_dot_protos_dot_qpu__service__pb2.SubmitCircuitTaskRequest.FromString,
                     response_serializer=src_dot_lccfq__backend_dot_api_dot_protos_dot_qpu__service__pb2.SubmitCircuitTaskResponse.SerializeToString,
+            ),
+            'SubmitTestTask': grpc.unary_unary_rpc_method_handler(
+                    servicer.SubmitTestTask,
+                    request_deserializer=src_dot_lccfq__backend_dot_api_dot_protos_dot_qpu__service__pb2.SubmitTestTaskRequest.FromString,
+                    response_serializer=src_dot_lccfq__backend_dot_api_dot_protos_dot_qpu__service__pb2.SubmitTestTaskResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -129,6 +145,33 @@ class QPUExecutor(object):
             '/QPUExecutor/SubmitCircuitTask',
             src_dot_lccfq__backend_dot_api_dot_protos_dot_qpu__service__pb2.SubmitCircuitTaskRequest.SerializeToString,
             src_dot_lccfq__backend_dot_api_dot_protos_dot_qpu__service__pb2.SubmitCircuitTaskResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SubmitTestTask(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/QPUExecutor/SubmitTestTask',
+            src_dot_lccfq__backend_dot_api_dot_protos_dot_qpu__service__pb2.SubmitTestTaskRequest.SerializeToString,
+            src_dot_lccfq__backend_dot_api_dot_protos_dot_qpu__service__pb2.SubmitTestTaskResponse.FromString,
             options,
             channel_credentials,
             insecure,

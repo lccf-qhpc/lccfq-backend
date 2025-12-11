@@ -11,9 +11,11 @@ from lccfq_backend.api.protobufs_compiled.qpu_service_pb2 import (
     ExecutorResponse,
     SubmitCircuitTaskRequest,
     SubmitCircuitTaskResponse,
+    SubmitTestTaskRequest,
+    SubmitTestTaskResponse,
 )
 from lccfq_backend.backend.executor import QPUExecutor
-from lccfq_backend.model.tasks import CircuitTask, Gate
+from lccfq_backend.model.tasks import CircuitTask, TestTask, Gate
 from lccfq_backend.backend.error import UnknownQPUTaskType
 from lccfq_backend.utils.log import setup_logger
 
@@ -127,6 +129,86 @@ class ExecutorService(QPUExecutorServicer):
         except Exception as e:
             logger.error(f"Error submitting circuit task: {e}", exc_info=True)
             return SubmitCircuitTaskResponse(
+                task_id="",
+                success=False,
+                message=f"Internal error: {str(e)}"
+            )
+
+    def SubmitTestTask(
+        self,
+        request: SubmitTestTaskRequest,
+        context: grpc.ServicerContext
+    ) -> SubmitTestTaskResponse:
+        """
+        Handle test task submission from gRPC client.
+
+        Args:
+            request: SubmitTestTaskRequest with symbol, params, and shots
+            context: gRPC service context (contains client certificate metadata)
+
+        Returns:
+            SubmitTestTaskResponse with task_id and status
+        """
+        try:
+            # Extract user ID from client certificate
+            user_id = self._extract_user_from_context(context)
+            logger.info(f"Received test task submission from user: {user_id}")
+
+            # Validate shots is positive
+            if request.shots <= 0:
+                logger.error(f"Invalid shots value: {request.shots}")
+                return SubmitTestTaskResponse(
+                    task_id="",
+                    success=False,
+                    message=f"Invalid shots value: {request.shots}. Must be positive."
+                )
+
+            # Validate symbol is not empty
+            if not request.symbol or request.symbol.strip() == "":
+                logger.error("Empty test symbol provided")
+                return SubmitTestTaskResponse(
+                    task_id="",
+                    success=False,
+                    message="Test symbol cannot be empty."
+                )
+
+            # Create TestTask (auto-generates task_id via UUID)
+            test_task = TestTask(
+                symbol=request.symbol,
+                params=list(request.params),
+                shots=request.shots,
+            )
+
+            # Enqueue task directly in queue (async - don't execute immediately)
+            # Using default priority=0 and no context_id for simplicity
+            # NOTE: We call queue.enqueue() directly instead of executor.execute()
+            # because execute() would immediately dispatch if QPU is idle,
+            # but we want async behavior - just enqueue and let main loop handle execution
+            self.executor.queue.enqueue(
+                task=test_task,
+                user=user_id,
+                context_id=None,
+                priority=0
+            )
+
+            logger.info(f"Test task enqueued: {test_task.task_id} for user {user_id}")
+
+            return SubmitTestTaskResponse(
+                task_id=test_task.task_id,
+                success=True,
+                message=f"Task {test_task.task_id} enqueued successfully"
+            )
+
+        except UnknownQPUTaskType as e:
+            logger.error(f"Invalid task type: {e}")
+            return SubmitTestTaskResponse(
+                task_id="",
+                success=False,
+                message=f"Task submission failed: {str(e)}"
+            )
+        except Exception as e:
+            logger.error(f"Error submitting test task: {e}", exc_info=True)
+            return SubmitTestTaskResponse(
                 task_id="",
                 success=False,
                 message=f"Internal error: {str(e)}"

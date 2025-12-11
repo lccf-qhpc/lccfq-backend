@@ -22,7 +22,7 @@ class GRPCServer:
     def __init__(
         self,
         executor: QPUExecutor,
-        address: str = "[::]",
+        address: str = "localhost",
         port: int = 50052,
         cert_dir: str | Path = "./certs",
         max_workers: int = 10,

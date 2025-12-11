@@ -31,7 +31,22 @@ message SubmitCircuitTaskResponse {
   string message = 3;                   // Optional message (e.g., error details)
 }
 
+// Request to submit a test task
+message SubmitTestTaskRequest {
+  string symbol = 1;                    // Test name (e.g., "XEB", "RB")
+  repeated int32 params = 2;            // Test parameters
+  int32 shots = 3;                      // Number of measurement shots
+}
+
+// Response after submitting a test task
+message SubmitTestTaskResponse {
+  string task_id = 1;                   // UUID of the enqueued task
+  bool success = 2;                     // Whether enqueue succeeded
+  string message = 3;                   // Optional message (e.g., error details)
+}
+
 service QPUExecutor {
   rpc Ping(ExecutorRequest) returns (ExecutorResponse);
   rpc SubmitCircuitTask(SubmitCircuitTaskRequest) returns (SubmitCircuitTaskResponse);
+  rpc SubmitTestTask(SubmitTestTaskRequest) returns (SubmitTestTaskResponse);
 }

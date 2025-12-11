@@ -292,7 +292,7 @@ class RealHWManClient(BaseHWManClient):
             "t2r": self.client.start_t2r,
             "t2e": self.client.start_t2e,
             "power_rabi": self.client.start_power_rabi,
-            "res_spec": self.client.start_res_spec,
+            "resfreq": self.client.start_res_spec,
             "res_spec_vs_gain": self.client.start_res_spec_vs_gain,
             "sat_spec": self.client.start_sat_spec,
             "pi_spec": self.client.start_pi_spec,
@@ -391,34 +391,7 @@ class RealHWManClient(BaseHWManClient):
         """
         log.info(f"Running QTol with threshold={threshold}, retries={retries} on real QPU.")
 
-        try:
-            for attempt in range(retries + 1):
-                # Evaluate current fidelity
-                try:
-                    fidelity = self.evaluate_fidelity()
-                except NotImplementedError:
-                    log.warning("evaluate_fidelity not implemented, assuming below threshold")
-                    fidelity = 0.0
-
-                if fidelity >= threshold:
-                    log.info(f"QTol threshold met on attempt {attempt + 1}")
-                    return HWManStatus.OK, None, None
-
-                # Retune if below threshold and we have retries left
-                if attempt < retries:
-                    log.info(f"Fidelity {fidelity:.3f} below threshold {threshold:.3f}, retuning...")
-                    retune_status, retune_msg, observables = self.retune()
-
-                    if retune_status != HWManStatus.OK:
-                        log.error(f"Retune failed: {retune_msg}")
-
-            # Final check
-            log.warning(f"QTol threshold not met after {retries} retries.")
-            return HWManStatus.WARNING, f"Threshold {threshold:.3f} not met after retries", None
-
-        except Exception as e:
-            log.error(f"QTol failed with error: {e}")
-            return HWManStatus.ERROR, str(e), None
+        raise NotImplementedError("Run QTol is not yet implemented for RealHWManClient.")
 
     def ping(self) -> bool:
         """

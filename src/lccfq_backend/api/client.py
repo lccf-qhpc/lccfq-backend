@@ -10,6 +10,8 @@ from lccfq_backend.api.protobufs_compiled.qpu_service_pb2 import (
     ExecutorRequest,
     SubmitCircuitTaskRequest,
     SubmitCircuitTaskResponse,
+    SubmitTestTaskRequest,
+    SubmitTestTaskResponse,
     Gate as ProtoGate,
 )
 from lccfq_backend.model.tasks import Gate
@@ -161,4 +163,50 @@ class Client:
 
         except grpc.RpcError as e:
             logger.error(f"gRPC error during SubmitCircuitTask: {e.code()} - {e.details()}")
+            raise e
+
+    def submit_test_task(
+        self,
+        symbol: str,
+        params: list[int] = [0, 0],
+        shots: int = 1000
+    ) -> SubmitTestTaskResponse:
+        """
+        Submit a test task to the QPU executor.
+
+        Args:
+            symbol: Test name (e.g., "XEB", "RB")
+            params: List of test parameters
+            shots: Number of measurement shots to perform
+
+        Returns:
+            SubmitTestTaskResponse with task_id and status
+
+        Raises:
+            grpc.RpcError: If the RPC call fails
+            AssertionError: If executor_stub is not initialized
+        """
+        try:
+            assert self.executor_stub is not None, "Executor stub is not initialized."
+
+            # Create request
+            request = SubmitTestTaskRequest(
+                symbol=symbol.symbol,
+                params=params,
+                shots=shots
+            )
+
+            # Make RPC call
+            logger.info(f"Submitting test task '{symbol}' with params {params}, {shots} shots")
+            response = self.executor_stub.SubmitTestTask(request)
+
+            if response.success:
+                logger.info(f"Test task submitted successfully: {response.task_id}")
+            else:
+                logger.error(f"Test task submission failed: {response.message}")
+
+            return response
+
+        except grpc.RpcError as e:
+            logger.error(f"gRPC error during SubmitTestTask: {e.code()} - {e.details()}")
             raise e

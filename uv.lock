@@ -1077,11 +1077,11 @@ dev = [
     { name = "ruff", specifier = ">=0.11.10" },
 ]
 hw-resources = [
-    { name = "instrumentserver", editable = "../../instrumentserver" },
-    { name = "labcore", editable = "../../labcore" },
-    { name = "qcui-analysis", editable = "../../analysis" },
-    { name = "qcui-measurement", editable = "../../measurement" },
-    { name = "qick", editable = "../../qick" },
+    { name = "instrumentserver", editable = "../instrumentserver" },
+    { name = "labcore", editable = "../labcore" },
+    { name = "qcui-analysis", editable = "../analysis" },
+    { name = "qcui-measurement", editable = "../measurement" },
+    { name = "qick", editable = "../qick" },
 ]
 labcore = [
     { name = "hvplot", specifier = ">=0.12.0" },
