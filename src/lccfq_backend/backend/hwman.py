@@ -264,14 +264,37 @@ class RealHWManClient(BaseHWManClient):
         """
         Execute a quantum circuit on the real QPU via hwman.
 
-        Note: This method needs to be implemented based on the actual hwman API
-        for circuit execution. Currently raises NotImplementedError.
+        Args:
+            gates: List of Gate objects representing the circuit
+            shots: Number of measurement shots to perform
+
+        Returns:
+            Dictionary mapping bitstring outcomes to counts
+
+        Raises:
+            RuntimeError: If circuit execution fails
         """
         log.info(f"Running circuit with {len(gates)} gates and {shots} shots on real QPU.")
-        raise NotImplementedError(
-            "run_circuit is not yet implemented for RealHWManClient. "
-            "The hwman gRPC API needs to expose circuit execution methods."
-        )
+
+        # Convert Gate Pydantic models to dicts for the hwman client
+        gate_dicts = [
+            {
+                "symbol": g.symbol,
+                "target_qubits": g.target_qubits,
+                "control_qubits": g.control_qubits,
+                "params": g.params,
+            }
+            for g in gates
+        ]
+
+        result = self.client.run_circuit(gates=gate_dicts, shots=shots)
+
+        if result is None:
+            log.error("Circuit execution returned None from hwman")
+            raise RuntimeError("Circuit execution failed: hwman returned None")
+
+        log.info(f"Circuit execution completed with {len(result)} unique outcomes")
+        return result
 
     def run_test(self, symbol: str, params: List[int], shots: int) -> Dict[str, float]:
         """

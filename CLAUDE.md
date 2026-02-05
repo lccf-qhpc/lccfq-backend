@@ -71,6 +71,9 @@ print(settings.to_dict())  # Get all settings as dict
 - Run with max failures: `pytest --maxfail=3`
 - Test configuration is in `pyproject.toml` under `[tool.pytest.ini_options]`
 
+**Type Checking & Linting**:
+- Type checks (mypy) and ruff linting are not required for now during active development
+
 **Building gRPC Protos**:
 ```bash
 make protos
