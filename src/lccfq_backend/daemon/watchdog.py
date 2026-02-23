@@ -14,7 +14,7 @@ from ..logging.logger import setup_logger
 from ..backend.hwman import HWManClient
 from ..slurm.exporter import export_observables
 
-logger = setup_logger("lccfq_backend.daemon.watchdog")
+logger = setup_logger("lccfq.watchdog")
 
 
 class QPUWatchdog:
@@ -25,6 +25,8 @@ class QPUWatchdog:
         self.hwman = HWManClient()
         self.stop_event = Event()
         self.status_file = "/tmp/qpu_status.flag"  # Readable by SLURM or systemd unit
+        self._check_count = 0
+        self._consecutive_failures = 0
 
     def is_qpu_online(self) -> bool:
         try:
@@ -42,7 +44,7 @@ class QPUWatchdog:
         try:
             return self.hwman.ping()
         except Exception as e:
-            logger.error(f"[Watchdog] Hardware ping failed: {e}")
+            logger.error(f"Hardware ping failed: {e}")
             return False
 
     def write_status(self, alive: bool):
@@ -55,24 +57,33 @@ class QPUWatchdog:
 
     def run(self):
         """Main loop for the watchdog."""
-        logger.info("[Watchdog] Starting watchdog main loop.")
+        logger.info(f"Starting watchdog main loop, interval={self.interval}s.")
+
         while not self.stop_event.is_set():
+            self._check_count += 1
             alive = self.check_hardware()
             self.write_status(alive)
-            logger.info(f"[Watchdog] QPU status: {'online' if alive else 'offline'}")
+            if alive:
+                self._consecutive_failures = 0
+            else:
+                self._consecutive_failures += 1
+            logger.info(
+                f"QPU health check #{self._check_count}: status={'online' if alive else 'offline'}, "
+                f"consecutive_failures={self._consecutive_failures}"
+            )
 
             if alive:
                 try:
                     observables = self.hwman.get_observables()
                     export_observables(observables)
                 except Exception as e:
-                    logger.warning(f"[Watchdog] Could not export observables: {e}")
+                    logger.warning(f"Could not export observables: {e}")
 
             time.sleep(self.interval)
 
     def stop(self):
         """External stop signal handler."""
-        logger.info("[Watchdog] Watchdog stop requested.")
+        logger.info("Watchdog stop requested.")
         self.stop_event.set()
         self.write_status(False)
 
@@ -82,16 +93,16 @@ def start_watchdog(interval: int = 300) -> QPUWatchdog:
     Returns the watchdog instance so it can be stopped externally.
     This function should only be called from the main thread.
     """
-    logger.info(f"[Watchdog] Preparing to start watchdog thread with interval = {interval} sec.")
+    logger.info(f"Preparing to start watchdog thread with interval = {interval} sec.")
 
     watchdog = QPUWatchdog(interval=interval)
 
     try:
         thread = threading.Thread(target=watchdog.run, daemon=True)
         thread.start()
-        logger.info(f"[Watchdog] Watchdog thread started successfully (daemon = True).")
+        logger.info(f"Watchdog thread started successfully (daemon = True).")
     except Exception as e:
-        logger.exception(f"[Watchdog] Failed to start watchdog thread: {e}")
+        logger.exception("Failed to start watchdog thread")
         raise
 
     return watchdog

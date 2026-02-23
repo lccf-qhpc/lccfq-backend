@@ -1,0 +1,17 @@
+[Unit]
+Description=LCCFQ QPU Watchdog Service
+After=network.target
+
+[Service]
+Type=simple
+User=lccfq
+WorkingDirectory=/opt/lccfq-backend
+ExecStart=/opt/lccfq-backend/.venv/bin/python3 -m lccfq_backend.daemon.watchdog
+ExecStopPost=/bin/bash -c 'echo offline > /tmp/qpu_status.flag'
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/var/log/lccfq_backend/watchdog.log
+StandardError=append:/var/log/lccfq_backend/watchdog.err
+
+[Install]
+WantedBy=multi-user.target

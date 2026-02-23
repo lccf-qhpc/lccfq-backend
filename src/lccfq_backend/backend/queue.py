@@ -15,7 +15,7 @@ from ..model.tasks import TaskBase
 from ..model.context import QPUExecutionContext
 from ..logging.logger import setup_logger
 
-logger = setup_logger("QPUTaskQueue")
+logger = setup_logger("lccfq.queue")
 
 
 @dataclass
@@ -35,7 +35,6 @@ class QPUTaskQueue:
         logger.info("Initialized task queue")
 
     def enqueue(self, task: TaskBase, user: str, context_id: Optional[str] = None, priority: int = 0) -> QueueEntry:
-        logger.info(f"Enqueueing task {task.task_id} (type: {task.type}) by user {user}")
         entry = QueueEntry(
             task_id=task.task_id,
             task=task,
@@ -52,6 +51,10 @@ class QPUTaskQueue:
                 logger.debug(f"Locked context {ctx_id} for task {task.task_id}")
 
         self._queue.append(entry)
+        logger.info(
+            f"Enqueueing task {task.task_id} (type: {task.type}) by user {user}, "
+            f"priority={priority}, queue_depth={len(self._queue)}"
+        )
         return entry
 
     def dequeue(self) -> Optional[QueueEntry]:
@@ -61,7 +64,11 @@ class QPUTaskQueue:
 
         best_entry = min(self._queue, key=lambda entry: (-entry.priority, entry.timestamp))
         self._queue.remove(best_entry)
-        logger.info(f"Dequeued task {best_entry.task_id} (type: {best_entry.task.type})")
+        wait_time = (datetime.now() - best_entry.timestamp).total_seconds()
+        logger.info(
+            f"Dequeued task {best_entry.task_id} (type: {best_entry.task.type}), "
+            f"waited={wait_time:.2f}s, queue_depth={len(self._queue)}"
+        )
         return best_entry
 
     def dequeue_all_for_context(self, context: QPUExecutionContext) -> List[QueueEntry]:

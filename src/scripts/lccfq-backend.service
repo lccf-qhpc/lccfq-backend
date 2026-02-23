@@ -1,0 +1,17 @@
+[Unit]
+Description=LCCFQ Backend Core Service
+After=network.target
+
+[Service]
+Type=simple
+User=lccfq
+WorkingDirectory=/opt/lccfq-backend
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/lccfq-backend/.venv/bin/python3 -m lccfq_backend.main
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/var/log/lccfq_backend/backend.log
+StandardError=append:/var/log/lccfq_backend/backend.err
+
+[Install]
+WantedBy=multi-user.target

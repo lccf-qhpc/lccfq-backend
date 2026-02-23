@@ -9,6 +9,7 @@ Description:
 License: Apache 2.0
 Contact: nunezco2@illinois.edu
 """
+import time
 from typing import Union, Optional, List
 from ..model.tasks import CircuitTask, TestTask, ControlTask, TaskType, TaskBase
 from ..model.results import CircuitResult, TestResult, ControlAck, TaskResult
@@ -19,7 +20,7 @@ from .hwman import HWManClient, HWManStatus
 from ..logging.logger import setup_logger
 
 
-logger = setup_logger("QPUExecutor")
+logger = setup_logger("lccfq.executor")
 
 class QPUExecutor:
     """Representation of the QPU executor"""
@@ -97,8 +98,13 @@ class QPUExecutor:
             return self._dispatch(entry.task)
 
     def _execute_batched_context(self, context_entries: List[QueueEntry]) -> List[Union[CircuitResult, TestResult, ControlAck]]:
-        logger.info(f"Beginning execution of context batch: {context_entries[0].context_id}")
+        users = {e.user for e in context_entries}
+        logger.info(
+            f"Beginning execution of context batch: {context_entries[0].context_id}, "
+            f"tasks={len(context_entries)}, users={users}"
+        )
         results = []
+        batch_start = time.monotonic()
 
         for entry in context_entries:
             task: TaskBase = entry.task
@@ -117,7 +123,11 @@ class QPUExecutor:
 
             results.append(result)
 
-        logger.info(f"Completed execution of context batch {context_entries[0].context_id}")
+        batch_elapsed = time.monotonic() - batch_start
+        logger.info(
+            f"Completed context batch {context_entries[0].context_id}, "
+            f"tasks={len(results)}, elapsed={batch_elapsed:.3f}s"
+        )
         self._handle_deferred_tasks()
         return results
 
@@ -133,21 +143,28 @@ class QPUExecutor:
             logger.info(f"Deferred task {entry.task.task_id} completed with result: {result}")
 
     def _execute_circuit(self, task: CircuitTask) -> CircuitResult:
-        logger.debug(f"Executing CIRCUIT task {task.task_id}")
+        logger.debug(f"Executing CIRCUIT task {task.task_id}, gates={len(task.gates)}, shots={task.shots}")
         self.qpu.transition(QPUEvent.TASK_STARTED)
+        t0 = time.monotonic()
         result = self.hwman.run_circuit(task.gates, task.shots)
+        elapsed = time.monotonic() - t0
         self.qpu.transition(QPUEvent.TASK_FINISHED)
+        logger.info(f"CIRCUIT task {task.task_id} completed, elapsed={elapsed:.3f}s")
         return CircuitResult(task_id=task.task_id, distribution=result)
 
     def _execute_test(self, task: TestTask) -> TestResult:
-        logger.debug(f"Executing TEST task {task.task_id}")
+        logger.debug(f"Executing TEST task {task.task_id}, symbol={task.symbol}, shots={task.shots}")
         self.qpu.transition(QPUEvent.TASK_STARTED)
+        t0 = time.monotonic()
         params = self.hwman.run_test(task.symbol, task.params, task.shots)
+        elapsed = time.monotonic() - t0
         self.qpu.transition(QPUEvent.TASK_FINISHED)
+        logger.info(f"TEST task {task.task_id} completed, elapsed={elapsed:.3f}s")
         return TestResult(task_id=task.task_id, parameters=params)
 
     def _execute_control(self, task: ControlTask) -> ControlAck:
         logger.debug(f"Executing CONTROL task {task.task_id}: {task.command}")
+        t0 = time.monotonic()
 
         match task.command:
             case "reset":
@@ -176,19 +193,26 @@ class QPUExecutor:
             case "qtol":
                 tolerance = float(task.params[0]) if task.params else 0.98
                 max_retries = int(task.params[1]) if len(task.params) > 1 else 3
+                logger.info(f"QTol task {task.task_id}: tolerance={tolerance:.3f}, max_retries={max_retries}")
 
                 for attempt in range(max_retries):
                     fidelity = self.hwman.evaluate_fidelity()
+                    logger.debug(f"QTol attempt {attempt + 1}/{max_retries}: fidelity={fidelity:.3f}, target={tolerance:.3f}")
                     if fidelity >= tolerance:
+                        elapsed = time.monotonic() - t0
+                        logger.info(f"QTol task {task.task_id} succeeded on attempt {attempt + 1}, elapsed={elapsed:.3f}s")
                         self.qpu.transition(QPUEvent.TUNE_SUCCESS)
                         return ControlAck(task_id=task.task_id, status="ok", message=f"Fidelity {fidelity:.3f} meets tolerance {tolerance:.3f}")
                     self.hwman.retune()
 
                 fidelity = self.hwman.evaluate_fidelity()
+                elapsed = time.monotonic() - t0
                 if fidelity >= tolerance:
+                    logger.warning(f"QTol task {task.task_id} met tolerance only after all {max_retries} retries, elapsed={elapsed:.3f}s")
                     self.qpu.transition(QPUEvent.TUNE_SUCCESS)
                     return ControlAck(task_id=task.task_id, status="warning", message=f"Fidelity {fidelity:.3f} meets tolerance after retries, but warning issued")
                 else:
+                    logger.error(f"QTol task {task.task_id} failed after {max_retries} retries, fidelity={fidelity:.3f} < {tolerance:.3f}, elapsed={elapsed:.3f}s")
                     self.qpu.transition(QPUEvent.TUNE_FAIL)
                     return ControlAck(task_id=task.task_id, status="error", message=f"Fidelity {fidelity:.3f} below tolerance {tolerance:.3f}")
 

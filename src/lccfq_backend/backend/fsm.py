@@ -13,6 +13,18 @@ from enum import Enum
 from typing import Optional
 from ..model.state import QPUState
 from .error import UnknownQPUState
+from ..logging.logger import setup_logger
+
+logger = setup_logger("lccfq.fsm")
+
+# Transitions that indicate QPU degradation or failure — logged at WARNING
+_DEGRADATION_EVENTS = frozenset({
+    "device_fail",
+    "tune_fail",
+    "fidelity_degraded",
+    "disconnect",
+    "qtol_fail",
+})
 
 
 class QPUEvent(str, Enum):
@@ -110,5 +122,9 @@ class QPUAbstraction:
         :param next_state: next state
         :return: nothing
         """
-        # TODO: implement proper logging later
-        print(f"[QPU state] {prev} --({event})--> {next_state}")
+        msg = f"QPU state transition: {prev} --({event})--> {next_state}"
+
+        if event.value in _DEGRADATION_EVENTS:
+            logger.warning(msg)
+        else:
+            logger.info(msg)

@@ -9,13 +9,14 @@ Description:
 License: Apache 2.0
 Contact: nunezco2@illinois.edu
 """
+import time
 from enum import Enum
 from typing import List, Dict, Tuple, Optional
 from ..model.tasks import Gate
 from ..model.observables import QubitObservable, QPUObservables
 from ..logging.logger import setup_logger
 
-log = setup_logger("lccfq_backend.backend.hwman_client")
+logger = setup_logger("lccfq.hwman")
 
 
 class HWManStatus(str, Enum):
@@ -32,20 +33,27 @@ class HWManClient:
     """Hardware manager client interface. This assumes gRPC."""
 
     def __init__(self):
-        log.info("HWManClient initialized.")
+        logger.info("HWManClient initialized.")
 
     def run_circuit(self, gates: List[Gate], shots: int) -> Dict[str, int]:
-        log.info(f"Running circuit with {len(gates)} gates and {shots} shots.")
+        logger.info(f"Running circuit with {len(gates)} gates and {shots} shots.")
+        t0 = time.monotonic()
         # TODO: Replace with real quantum device API call
-        return {"000": int(0.5 * shots), "111": shots - int(0.5 * shots)}
+        result = {"000": int(0.5 * shots), "111": shots - int(0.5 * shots)}
+        logger.debug(f"Circuit execution completed, elapsed={time.monotonic() - t0:.3f}s")
+        return result
 
     def run_test(self, symbol: str, params: List[int], shots: int) -> Dict[str, float]:
-        log.info(f"Running test {symbol} with params={params} and shots={shots}.")
+        logger.info(f"Running test {symbol} with params={params} and shots={shots}.")
+        t0 = time.monotonic()
+
         # TODO: mock-up data here
-        return {
+        result = {
             "fidelity": 0.982,
             "xeb_fit": 0.975
         }
+        logger.debug(f"Test execution completed, elapsed={time.monotonic() - t0:.3f}s")
+        return result
 
     def get_observables(self) -> QPUObservables:
         """
@@ -53,7 +61,7 @@ class HWManClient:
 
         :return: QPUObservables object with per-qubit metrics
         """
-        log.info("Querying observables from QPU.")
+        logger.info("Querying observables from QPU.")
         observables = {
             i: QubitObservable(
                 t1=30.0 + i,
@@ -73,7 +81,8 @@ class HWManClient:
         return QPUObservables(qubits=observables)
 
     def retune(self) -> Tuple[HWManStatus, Optional[str], Optional[Dict[int, QubitObservable]]]:
-        log.info("Retuning QPU.")
+        logger.info("Retuning QPU.")
+        t0 = time.monotonic()
         # TODO: provide real implementation
         observables = {
             i: QubitObservable(
@@ -90,24 +99,25 @@ class HWManClient:
                 measurement_duration=12.0
             ) for i in range(5)
         }
-        log.info("Retune complete.")
+        logger.info(f"Retune complete, elapsed={time.monotonic() - t0:.3f}s")
         return HWManStatus.OK, None, observables
 
     def run_reset_all(self) -> Tuple[HWManStatus, Optional[str]]:
-        log.info("Resetting all qubits.")
+        logger.info("Resetting all qubits.")
         return HWManStatus.OK, None
 
     def evaluate_fidelity(self) -> float:
         # Simulate a fidelity check
         fidelity = 0.981
-        log.info(f"Evaluated fidelity: {fidelity}")
+        logger.info(f"Evaluated fidelity: {fidelity}")
         return fidelity
 
     def run_qtol(self, threshold: float, retries: int = 0) -> Tuple[
         HWManStatus, Optional[str], Optional[Dict[int, QubitObservable]]]:
-        log.info(f"Running QTol with threshold={threshold}, retries={retries}")
+        logger.info(f"Running QTol with threshold={threshold}, retries={retries}")
+
         if threshold > 0.99:
-            log.warning("Requested fidelity threshold too high.")
+            logger.warning("Requested fidelity threshold too high.")
             return HWManStatus.ERROR, "Unable to reach desired fidelity.", None
 
         observables = {
@@ -127,23 +137,23 @@ class HWManClient:
         }
 
         if threshold < 0.975:
-            log.info("QTol threshold met.")
+            logger.info("QTol threshold met.")
             return HWManStatus.OK, None, observables
         else:
-            log.warning("QTol threshold not met, returning warning status.")
+            logger.warning("QTol threshold not met, returning warning status.")
             return HWManStatus.WARNING, "Fidelity threshold not met after retries", observables
 
     def ping(self) -> bool:
         """Custom health signal to determine if QPU is alive."""
         try:
-            log.debug("Pinging QPU...")
+            logger.debug("Pinging QPU")
             # Simulate always online for now
             return True
         except Exception as e:
-            log.error(f"Ping failed: {e}")
+            logger.error(f"Ping failed: {e}")
             return False
 
     def shutdown(self):
-        log.info("Shutting down HWManClient.")
+        logger.info("Shutting down HWManClient.")
         # TODO: Add graceful disconnection logic if needed
         pass

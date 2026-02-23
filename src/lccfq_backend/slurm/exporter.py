@@ -15,7 +15,7 @@ from typing import Optional
 from ..model.observables import QPUObservables
 from ..logging.logger import setup_logger
 
-logger = setup_logger("slurm.exporter")
+logger = setup_logger("lccfq.slurm")
 
 EXPORT_PATH = Path("/tmp/qpu_observables.env")
 
@@ -35,7 +35,7 @@ def export_observables(
     :param max_qubits: Max number of qubits to export (by index)
     """
     lines = []
-    logger.info(f"[Exporter] Exporting QPU observables to {out_path}")
+    logger.info(f"Exporting QPU observables to {out_path}")
 
     for qidx, qobs in sorted(obs.qubits.items()):
         if max_qubits is not None and qidx >= max_qubits:
@@ -58,6 +58,6 @@ def export_observables(
     try:
         with open(out_path, "w") as f:
             f.write("\n".join(lines) + "\n")
-        logger.info(f"[Exporter] Wrote {len(lines)} lines to {out_path}")
+        logger.info(f"Wrote {len(lines)} lines to {out_path}")
     except Exception as e:
-        logger.error(f"[Exporter] Failed to write observables: {e}")
+        logger.error(f"Failed to write observables: {e}")
