@@ -8,12 +8,11 @@ Description:
 License: Apache 2.0
 """
 
-import os
 from pathlib import Path
 from typing import Optional
 
 from ..model.observables import QPUObservables
-from ..logging.logger import setup_logger
+from ..utils.log import setup_logger
 
 logger = setup_logger("lccfq.slurm")
 

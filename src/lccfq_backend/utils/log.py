@@ -1,5 +1,5 @@
 """
-Filename: logging.py
+Filename: log.py
 Author: Santiago Nunez-Corrales
 Date: 2025-10-20
 Version: 2.0

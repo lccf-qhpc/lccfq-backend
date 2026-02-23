@@ -3,7 +3,7 @@ name = "lccfq-backend"
 version = "0.1.0"
 description = "LCCFQ Backend Service"
 authors = [{name = "Santiago Nunez-Corrales", email = "nunezco2@illinois.edu"}]
-requires-python = ">=3.12"
+requires-python = "==3.12.*"
 readme = "README.md"
 dependencies = [
     "prometheus-client>=0.23.1",
@@ -11,6 +11,11 @@ dependencies = [
     "pytest>=8.4.2",
     "pytest-timeout>=2.4.0",
     "typer>=0.20.0",
+    "grpcio>=1.66.0",
+    "grpcio-tools>=1.66.0",
+    "cryptography>=43.0.0",
+    "pydantic-settings>=2.12.0",
+    "lccfq-hwman",
 ]
 
 [build-system]
@@ -29,6 +34,9 @@ addopts = "-ra"
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.4.1"
 pydantic = "^2.11.7"
+
+[tool.uv.sources]
+lccfq-hwman = { path = "../lccfq-hwman", editable = true }
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio", "mypy", "ruff"]

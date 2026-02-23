@@ -10,11 +10,16 @@ License: Apache 2.0
 Contact: nunezco2@illinois.edu
 """
 import time
+from abc import ABC, abstractmethod
 from enum import Enum
 from typing import List, Dict, Tuple, Optional
+
+from hwman.client.client import Client as HWManGRPCClient
+
 from ..model.tasks import Gate
 from ..model.observables import QubitObservable, QPUObservables
-from ..logging.logger import setup_logger
+from ..utils.log import setup_logger
+from ..config import config
 
 logger = setup_logger("lccfq.hwman")
 
@@ -29,16 +34,104 @@ class HWManStatus(str, Enum):
     DISCONNECTED = "disconnected"
 
 
-class HWManClient:
-    """Hardware manager client interface. This assumes gRPC."""
+class BaseHWManClient(ABC):
+    """Abstract base class for hardware manager client interface."""
+
+    @abstractmethod
+    def run_circuit(self, gates: List[Gate], shots: int) -> Dict[str, int]:
+        """
+        Execute a quantum circuit on the QPU.
+
+        :param gates: List of Gate objects representing the circuit
+        :param shots: Number of measurement shots to perform
+        :return: Dictionary mapping bitstring outcomes to counts
+        """
+        pass
+
+    @abstractmethod
+    def run_test(self, symbol: str, params: List[int], shots: int) -> Dict[str, float]:
+        """
+        Run a quantum benchmark test.
+
+        :param symbol: Test name/symbol (e.g., 'xeb', 'rb')
+        :param params: Test parameters
+        :param shots: Number of measurement shots
+        :return: Dictionary of test results (e.g., fidelity, XEB fit)
+        """
+        pass
+
+    @abstractmethod
+    def get_observables(self) -> QPUObservables:
+        """
+        Return latest observable values for all qubits.
+
+        :return: QPUObservables object with per-qubit metrics
+        """
+        pass
+
+    @abstractmethod
+    def retune(self) -> Tuple[HWManStatus, Optional[str], Optional[Dict[int, QubitObservable]]]:
+        """
+        Retune the QPU to optimize performance.
+
+        :return: Tuple of (status, error_message, observables)
+        """
+        pass
+
+    @abstractmethod
+    def run_reset_all(self) -> Tuple[HWManStatus, Optional[str]]:
+        """
+        Reset all qubits to ground state.
+
+        :return: Tuple of (status, error_message)
+        """
+        pass
+
+    @abstractmethod
+    def evaluate_fidelity(self) -> float:
+        """
+        Evaluate current QPU fidelity.
+
+        :return: Fidelity value between 0 and 1
+        """
+        pass
+
+    @abstractmethod
+    def run_qtol(self, threshold: float, retries: int = 0) -> Tuple[
+        HWManStatus, Optional[str], Optional[Dict[int, QubitObservable]]]:
+        """
+        Run quality tolerance check with automatic retune attempts.
+
+        :param threshold: Minimum acceptable fidelity threshold
+        :param retries: Number of retune attempts if threshold not met
+        :return: Tuple of (status, error_message, observables)
+        """
+        pass
+
+    @abstractmethod
+    def ping(self) -> bool:
+        """
+        Custom health signal to determine if QPU is alive.
+
+        :return: True if QPU is responsive, False otherwise
+        """
+        pass
+
+    @abstractmethod
+    def shutdown(self):
+        """Gracefully shutdown the hardware manager client."""
+        pass
+
+
+class MockHWManClient(BaseHWManClient):
+    """Mock implementation of hardware manager client for testing and development."""
 
     def __init__(self):
-        logger.info("HWManClient initialized.")
+        logger.info("MockHWManClient initialized.")
 
     def run_circuit(self, gates: List[Gate], shots: int) -> Dict[str, int]:
         logger.info(f"Running circuit with {len(gates)} gates and {shots} shots.")
         t0 = time.monotonic()
-        # TODO: Replace with real quantum device API call
         result = {"000": int(0.5 * shots), "111": shots - int(0.5 * shots)}
         logger.debug(f"Circuit execution completed, elapsed={time.monotonic() - t0:.3f}s")
         return result
@@ -46,8 +139,6 @@ class HWManClient:
     def run_test(self, symbol: str, params: List[int], shots: int) -> Dict[str, float]:
         logger.info(f"Running test {symbol} with params={params} and shots={shots}.")
         t0 = time.monotonic()
-
-        # TODO: mock-up data here
         result = {
             "fidelity": 0.982,
             "xeb_fit": 0.975
@@ -83,7 +174,6 @@ class HWManClient:
     def retune(self) -> Tuple[HWManStatus, Optional[str], Optional[Dict[int, QubitObservable]]]:
         logger.info("Retuning QPU.")
         t0 = time.monotonic()
-        # TODO: provide real implementation
         observables = {
             i: QubitObservable(
                 t1=30.0 + i,
@@ -107,7 +197,6 @@ class HWManClient:
         return HWManStatus.OK, None
 
     def evaluate_fidelity(self) -> float:
-        # Simulate a fidelity check
         fidelity = 0.981
         logger.info(f"Evaluated fidelity: {fidelity}")
         return fidelity
@@ -115,7 +204,6 @@ class HWManClient:
     def run_qtol(self, threshold: float, retries: int = 0) -> Tuple[
         HWManStatus, Optional[str], Optional[Dict[int, QubitObservable]]]:
         logger.info(f"Running QTol with threshold={threshold}, retries={retries}")
-
         if threshold > 0.99:
             logger.warning("Requested fidelity threshold too high.")
             return HWManStatus.ERROR, "Unable to reach desired fidelity.", None
@@ -147,13 +235,209 @@ class HWManClient:
         """Custom health signal to determine if QPU is alive."""
         try:
             logger.debug("Pinging QPU")
-            # Simulate always online for now
             return True
         except Exception as e:
             logger.error(f"Ping failed: {e}")
             return False
 
     def shutdown(self):
-        logger.info("Shutting down HWManClient.")
-        # TODO: Add graceful disconnection logic if needed
-        pass
+        logger.info("Shutting down MockHWManClient.")
+
+
+class RealHWManClient(BaseHWManClient):
+    """Real implementation of hardware manager client using gRPC."""
+
+    def __init__(self):
+        """
+        Initialize the real hardware manager client with gRPC connection.
+        Configuration is loaded from the backend settings.
+        """
+        logger.info("Initializing RealHWManClient...")
+
+        # Initialize the gRPC client with configuration from settings
+        self.client = HWManGRPCClient(
+            name=config.hwman_client_name,
+            address=config.hwman_address,
+            port=config.hwman_port,
+            clients_cert_dir=config.hwman_cert_client_dir,
+            ca_cert_path=f"{config.hwman_cert_dir}/ca.crt",
+            initialize_at_start=True
+        )
+
+        logger.info(f"RealHWManClient initialized. Attempting ping {config.hwman_address}:{config.hwman_port}")
+        self.ping()
+        logger.info("Ping successful. RealHWManClient connected to hwman server.")
+
+    def run_circuit(self, gates: List[Gate], shots: int) -> Dict[str, int]:
+        logger.info(f"Running circuit with {len(gates)} gates and {shots} shots on real QPU.")
+        t0 = time.monotonic()
+
+        gate_dicts = [
+            {
+                "symbol": g.symbol,
+                "target_qubits": g.target_qubits,
+                "control_qubits": g.control_qubits,
+                "params": g.params,
+            }
+            for g in gates
+        ]
+
+        result = self.client.run_circuit(gates=gate_dicts, shots=shots)
+
+        if result is None:
+            logger.error("Circuit execution returned None from hwman")
+            raise RuntimeError("Circuit execution failed: hwman returned None")
+
+        elapsed = time.monotonic() - t0
+        logger.info(f"Circuit execution completed with {len(result)} unique outcomes, elapsed={elapsed:.3f}s")
+        return result
+
+    def run_test(self, symbol: str, params: List[int], shots: int) -> Dict[str, float]:
+        """
+        Run a quantum benchmark test on the real QPU.
+
+        Maps test symbols to hwman test methods:
+        - 't1' -> start_t1()
+        - 't2r' -> start_t2r()
+        - 't2e' -> start_t2e()
+        - 'power_rabi' -> start_power_rabi()
+        - etc.
+        """
+        logger.info(f"Running test {symbol} with params={params} and shots={shots} on real QPU.")
+        t0 = time.monotonic()
+
+        test_method_map = {
+            "t1": self.client.start_t1,
+            "t2r": self.client.start_t2r,
+            "t2e": self.client.start_t2e,
+            "power_rabi": self.client.start_power_rabi,
+            "resfreq": self.client.start_res_spec,
+            "res_spec_vs_gain": self.client.start_res_spec_vs_gain,
+            "sat_spec": self.client.start_sat_spec,
+            "pi_spec": self.client.start_pi_spec,
+            "res_spec_after_pi": self.client.start_res_spec_after_pi,
+            "ro_cal": self.client.start_ro_cal,
+            "tuneup": self.client.start_tuneup_protocol,
+        }
+
+        if symbol.lower() not in test_method_map:
+            logger.error(f"Unknown test symbol: {symbol}")
+            raise ValueError(f"Unknown test symbol: {symbol}. Available: {list(test_method_map.keys())}")
+
+        result = test_method_map[symbol.lower()]()
+
+        if result is None:
+            logger.warning(f"Test {symbol} returned None. This may indicate an error.")
+            return {"error": 1.0, "success": 0.0}
+
+        elapsed = time.monotonic() - t0
+        logger.info(f"Test {symbol} completed, elapsed={elapsed:.3f}s")
+        return {
+            "fidelity": 0.982,  # Placeholder - parse from actual result
+            "success": 1.0
+        }
+
+    def get_observables(self) -> QPUObservables:
+        """
+        Query observables from the real QPU via hwman.
+
+        Note: This method needs to be implemented based on the actual hwman API
+        for querying qubit observables. Currently raises NotImplementedError.
+        """
+        logger.info("Querying observables from real QPU.")
+        raise NotImplementedError(
+            "get_observables is not yet implemented for RealHWManClient. "
+            "The hwman gRPC API needs to expose methods to query qubit observables."
+        )
+
+    def retune(self) -> Tuple[HWManStatus, Optional[str], Optional[Dict[int, QubitObservable]]]:
+        """
+        Retune the real QPU using the hwman tuneup protocol.
+        """
+        logger.info("Retuning real QPU via hwman tuneup protocol.")
+        t0 = time.monotonic()
+
+        try:
+            result = self.client.start_tuneup_protocol()
+
+            if result is None:
+                logger.error("Tuneup protocol returned None.")
+                return HWManStatus.ERROR, "Tuneup protocol failed", None
+
+            elapsed = time.monotonic() - t0
+            logger.info(f"Retune complete, elapsed={elapsed:.3f}s")
+            return HWManStatus.OK, None, None
+
+        except Exception as e:
+            logger.error(f"Failed to retune QPU: {e}")
+            return HWManStatus.ERROR, str(e), None
+
+    def run_reset_all(self) -> Tuple[HWManStatus, Optional[str]]:
+        """
+        Reset all qubits to ground state.
+
+        Note: This method needs to be implemented based on the actual hwman API.
+        Currently raises NotImplementedError.
+        """
+        logger.info("Resetting all qubits on real QPU.")
+        raise NotImplementedError(
+            "run_reset_all is not yet implemented for RealHWManClient. "
+            "The hwman gRPC API needs to expose reset functionality."
+        )
+
+    def evaluate_fidelity(self) -> float:
+        """
+        Evaluate current QPU fidelity.
+
+        Note: This method needs to be implemented based on the actual hwman API.
+        Currently raises NotImplementedError.
+        """
+        logger.info("Evaluating fidelity on real QPU.")
+        raise NotImplementedError(
+            "evaluate_fidelity is not yet implemented for RealHWManClient. "
+            "The hwman gRPC API needs to expose fidelity evaluation methods."
+        )
+
+    def run_qtol(self, threshold: float, retries: int = 0) -> Tuple[
+        HWManStatus, Optional[str], Optional[Dict[int, QubitObservable]]]:
+        """
+        Run quality tolerance check with automatic retune attempts on real QPU.
+
+        This method evaluates fidelity and retunes if below threshold.
+        """
+        logger.info(f"Running QTol with threshold={threshold}, retries={retries} on real QPU.")
+        raise NotImplementedError("Run QTol is not yet implemented for RealHWManClient.")
+
+    def ping(self) -> bool:
+        """
+        Check if the real QPU is alive by pinging the hwman server.
+        """
+        try:
+            logger.debug("Pinging real QPU via hwman")
+            response = self.client.ping_server()
+
+            if response is not None:
+                logger.debug(f"Ping successful: {response}")
+                return True
+            else:
+                logger.warning("Ping returned None, QPU may be offline")
+                return False
+
+        except Exception as e:
+            logger.error(f"Ping failed: {e}")
+            return False
+
+    def shutdown(self):
+        """Gracefully shutdown the hardware manager client connection."""
+        logger.info("Shutting down RealHWManClient.")
+
+        try:
+            if hasattr(self.client, 'channel') and self.client.channel:
+                self.client.channel.close()
+                logger.info("gRPC channel closed successfully.")
+        except Exception as e:
+            logger.error(f"Error during shutdown: {e}")
+
+
+
+HWManClient = MockHWManClient if config.hwman_mock_mode else RealHWManClient

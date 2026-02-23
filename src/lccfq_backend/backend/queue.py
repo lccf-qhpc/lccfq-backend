@@ -8,12 +8,12 @@ from multiple users and programs to be stored, dequeued, inspected, and managed 
 """
 
 from typing import Optional, List, Dict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from collections import deque, defaultdict
 from ..model.tasks import TaskBase
 from ..model.context import QPUExecutionContext
-from ..logging.logger import setup_logger
+from ..utils.log import setup_logger
 
 logger = setup_logger("lccfq.queue")
 

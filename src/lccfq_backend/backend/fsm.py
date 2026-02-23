@@ -13,7 +13,7 @@ from enum import Enum
 from typing import Optional
 from ..model.state import QPUState
 from .error import UnknownQPUState
-from ..logging.logger import setup_logger
+from ..utils.log import setup_logger
 
 logger = setup_logger("lccfq.fsm")
 
