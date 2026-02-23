@@ -95,11 +95,17 @@ class CircuitTask(TaskBase):
 class TestTask(TaskBase):
     """Model for a test task
 
+    NOTE: The `params` field currently uses List[int] but this may not be adequate
+    for all test types. This needs to be re-evaluated to support more flexible
+    parameter types (e.g., floats, nested structures, or a more generic Dict/JSON
+    format depending on the test symbol requirements).
+
+    TODO: Revisit params type definition based on actual test requirements.
     """
     __test__ = False
     type: Literal[TaskType.TEST] = Field(default=TaskType.TEST)
     symbol: str
-    params: List[int]
+    params: List[int]  # TODO: Re-evaluate this type - may need List[float], Dict, or Union type
     shots: int
 
 

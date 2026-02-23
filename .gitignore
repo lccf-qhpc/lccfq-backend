@@ -8,3 +8,14 @@ __pycache__/
 *.iml
 *.idea
 dist/
+build/
+
+.idea
+.claude
+*.egg-info/
+
+.DS_Store
+*.crt
+*.key
+
+config.toml
