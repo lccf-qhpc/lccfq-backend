@@ -17,6 +17,7 @@ from .queue import QPUTaskQueue, QueueEntry
 from .fsm import QPUAbstraction, QPUEvent, QPUState
 from .error import UnknownQPUTaskType, QPUQueueEmpty
 from .hwman import HWManClient, HWManStatus
+from .result_store import ResultStore
 from ..utils.log import setup_logger
 
 
@@ -25,10 +26,11 @@ logger = setup_logger("lccfq.executor")
 class QPUExecutor:
     """Representation of the QPU executor"""
 
-    def __init__(self):
+    def __init__(self, result_store: Optional[ResultStore] = None):
         self.qpu = QPUAbstraction()
         self.hwman = HWManClient()
         self.queue = QPUTaskQueue()
+        self.result_store = result_store
 
         logger.info("QPUExecutor initialized")
 
@@ -79,6 +81,8 @@ class QPUExecutor:
                 logger.error(f"Unknown task type dispatched: {task.type}")
                 raise UnknownQPUTaskType(task.type)
 
+        if self.result_store and result is not None:
+            self.result_store.save(result)
         self._handle_deferred_tasks()
         return result
 
@@ -122,6 +126,8 @@ class QPUExecutor:
                     raise UnknownQPUTaskType(task.type)
 
             results.append(result)
+            if self.result_store and result is not None:
+                self.result_store.save(result)
 
         batch_elapsed = time.monotonic() - batch_start
         logger.info(
@@ -146,21 +152,21 @@ class QPUExecutor:
         logger.debug(f"Executing CIRCUIT task {task.task_id}, gates={len(task.gates)}, shots={task.shots}")
         self.qpu.transition(QPUEvent.TASK_STARTED)
         t0 = time.monotonic()
-        result = self.hwman.run_circuit(task.gates, task.shots)
+        raw = self.hwman.run_circuit(task.gates, task.shots)
         elapsed = time.monotonic() - t0
         self.qpu.transition(QPUEvent.TASK_FINISHED)
         logger.info(f"CIRCUIT task {task.task_id} completed, elapsed={elapsed:.3f}s")
-        return CircuitResult(task_id=task.task_id, distribution=result)
+        return CircuitResult(task_id=task.task_id, distribution=raw["distribution"], raw_response=raw)
 
     def _execute_test(self, task: TestTask) -> TestResult:
         logger.debug(f"Executing TEST task {task.task_id}, symbol={task.symbol}, shots={task.shots}")
         self.qpu.transition(QPUEvent.TASK_STARTED)
         t0 = time.monotonic()
-        params = self.hwman.run_test(task.symbol, task.params, task.shots)
+        raw = self.hwman.run_test(task.symbol, task.params, task.shots)
         elapsed = time.monotonic() - t0
         self.qpu.transition(QPUEvent.TASK_FINISHED)
         logger.info(f"TEST task {task.task_id} completed, elapsed={elapsed:.3f}s")
-        return TestResult(task_id=task.task_id, parameters=params)
+        return TestResult(task_id=task.task_id, parameters=raw, raw_response=raw)
 
     def _execute_control(self, task: ControlTask) -> ControlAck:
         logger.debug(f"Executing CONTROL task {task.task_id}: {task.command}")

@@ -10,7 +10,7 @@ License: Apache 2.0
 Contact: nunezco2@illinois.edu
 """
 from enum import Enum
-from typing import Dict, Optional, Literal
+from typing import Any, Dict, Optional, Literal
 from pydantic import BaseModel, Field
 
 
@@ -37,6 +37,7 @@ class CircuitResult(TaskResult):
     """
     result_type: Literal[ResultType.CIRCUIT] = Field(default=ResultType.CIRCUIT)
     distribution: Dict[str, int]
+    raw_response: Dict[str, Any] = Field(default_factory=dict)
 
 
 class TestResult(TaskResult):
@@ -44,6 +45,7 @@ class TestResult(TaskResult):
     """
     result_type: Literal[ResultType.TEST] = Field(default=ResultType.TEST)
     parameters: Dict[str, float]
+    raw_response: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ControlAck(TaskResult):

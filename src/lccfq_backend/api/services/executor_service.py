@@ -13,9 +13,16 @@ from lccfq_backend.api.protobufs_compiled.qpu_service_pb2 import (
     SubmitCircuitTaskResponse,
     SubmitTestTaskRequest,
     SubmitTestTaskResponse,
+    GetResultRequest,
+    GetResultResponse,
+    CircuitResultPayload,
+    TestResultPayload,
+    ControlAckPayload,
 )
 from lccfq_backend.backend.executor import QPUExecutor
+from lccfq_backend.backend.result_store import ResultStore
 from lccfq_backend.model.tasks import CircuitTask, TestTask, Gate
+from lccfq_backend.model.results import CircuitResult, TestResult, ControlAck
 from lccfq_backend.backend.error import UnknownQPUTaskType
 from lccfq_backend.utils.log import setup_logger
 
@@ -25,14 +32,16 @@ logger = setup_logger("ExecutorService")
 class ExecutorService(QPUExecutorServicer):
     """gRPC service that wraps the QPU Executor."""
 
-    def __init__(self, executor: QPUExecutor):
+    def __init__(self, executor: QPUExecutor, result_store: ResultStore | None = None):
         """
         Initialize the ExecutorService with an executor instance.
 
         Args:
             executor: QPUExecutor instance to use for handling requests
+            result_store: ResultStore for retrieving persisted task results
         """
         self.executor = executor
+        self.result_store = result_store
         logger.info("ExecutorService initialized with executor instance")
 
     def Ping(self, request: ExecutorRequest, context: grpc.ServicerContext) -> ExecutorResponse:
@@ -213,6 +222,63 @@ class ExecutorService(QPUExecutorServicer):
                 success=False,
                 message=f"Internal error: {str(e)}"
             )
+
+    def GetResult(
+        self,
+        request: GetResultRequest,
+        context: grpc.ServicerContext,
+    ) -> GetResultResponse:
+        """
+        Retrieve a previously executed task result by task ID.
+
+        Args:
+            request: GetResultRequest with task_id
+            context: gRPC service context
+
+        Returns:
+            GetResultResponse — found=True with the result payload, or found=False
+        """
+        task_id = request.task_id.strip()
+        logger.info(f"GetResult request for task_id={task_id}")
+
+        if not self.result_store:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            context.set_details("Result store not configured on this server")
+            return GetResultResponse(found=False, error_message="Result store not available")
+
+        result = self.result_store.load(task_id)
+
+        if result is None:
+            return GetResultResponse(found=False, error_message=f"No result for task {task_id}")
+
+        if isinstance(result, CircuitResult):
+            return GetResultResponse(
+                found=True,
+                circuit_result=CircuitResultPayload(
+                    task_id=result.task_id,
+                    distribution=result.distribution,
+                ),
+            )
+        if isinstance(result, TestResult):
+            return GetResultResponse(
+                found=True,
+                test_result=TestResultPayload(
+                    task_id=result.task_id,
+                    parameters=result.parameters,
+                ),
+            )
+        if isinstance(result, ControlAck):
+            return GetResultResponse(
+                found=True,
+                control_ack=ControlAckPayload(
+                    task_id=result.task_id,
+                    status=result.status,
+                    message=result.message or "",
+                ),
+            )
+
+        logger.error(f"Unexpected result type for task {task_id}: {type(result)}")
+        return GetResultResponse(found=False, error_message="Unexpected result type")
 
     def _extract_user_from_context(self, context: grpc.ServicerContext) -> str:
         """

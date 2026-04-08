@@ -18,3 +18,5 @@ build/
 *.key
 
 config.toml
+
+results/

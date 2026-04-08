@@ -24,13 +24,17 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n.src/lccfq_backend/api/protos/qpu_service.proto\"\"\n\x0f\x45xecutorRequest\x12\x0f\n\x07message\x18\x01 \x01(\t\"4\n\x10\x45xecutorResponse\x12\x0f\n\x07message\x18\x01 \x01(\t\x12\x0f\n\x07success\x18\x02 \x01(\x08\"U\n\x04Gate\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x15\n\rtarget_qubits\x18\x02 \x03(\x05\x12\x16\n\x0e\x63ontrol_qubits\x18\x03 \x03(\x05\x12\x0e\n\x06params\x18\x04 \x03(\x01\"?\n\x18SubmitCircuitTaskRequest\x12\x14\n\x05gates\x18\x01 \x03(\x0b\x32\x05.Gate\x12\r\n\x05shots\x18\x02 \x01(\x05\"N\n\x19SubmitCircuitTaskResponse\x12\x0f\n\x07task_id\x18\x01 \x01(\t\x12\x0f\n\x07success\x18\x02 \x01(\x08\x12\x0f\n\x07message\x18\x03 \x01(\t\"F\n\x15SubmitTestTaskRequest\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x0e\n\x06params\x18\x02 \x03(\x05\x12\r\n\x05shots\x18\x03 \x01(\x05\"K\n\x16SubmitTestTaskResponse\x12\x0f\n\x07task_id\x18\x01 \x01(\t\x12\x0f\n\x07success\x18\x02 \x01(\x08\x12\x0f\n\x07message\x18\x03 \x01(\t2\xc9\x01\n\x0bQPUExecutor\x12+\n\x04Ping\x12\x10.ExecutorRequest\x1a\x11.ExecutorResponse\x12J\n\x11SubmitCircuitTask\x12\x19.SubmitCircuitTaskRequest\x1a\x1a.SubmitCircuitTaskResponse\x12\x41\n\x0eSubmitTestTask\x12\x16.SubmitTestTaskRequest\x1a\x17.SubmitTestTaskResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n.src/lccfq_backend/api/protos/qpu_service.proto\"\"\n\x0f\x45xecutorRequest\x12\x0f\n\x07message\x18\x01 \x01(\t\"4\n\x10\x45xecutorResponse\x12\x0f\n\x07message\x18\x01 \x01(\t\x12\x0f\n\x07success\x18\x02 \x01(\x08\"U\n\x04Gate\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x15\n\rtarget_qubits\x18\x02 \x03(\x05\x12\x16\n\x0e\x63ontrol_qubits\x18\x03 \x03(\x05\x12\x0e\n\x06params\x18\x04 \x03(\x01\"?\n\x18SubmitCircuitTaskRequest\x12\x14\n\x05gates\x18\x01 \x03(\x0b\x32\x05.Gate\x12\r\n\x05shots\x18\x02 \x01(\x05\"N\n\x19SubmitCircuitTaskResponse\x12\x0f\n\x07task_id\x18\x01 \x01(\t\x12\x0f\n\x07success\x18\x02 \x01(\x08\x12\x0f\n\x07message\x18\x03 \x01(\t\"F\n\x15SubmitTestTaskRequest\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x0e\n\x06params\x18\x02 \x03(\x05\x12\r\n\x05shots\x18\x03 \x01(\x05\"K\n\x16SubmitTestTaskResponse\x12\x0f\n\x07task_id\x18\x01 \x01(\t\x12\x0f\n\x07success\x18\x02 \x01(\x08\x12\x0f\n\x07message\x18\x03 \x01(\t\"#\n\x10GetResultRequest\x12\x0f\n\x07task_id\x18\x01 \x01(\t\"\x9b\x01\n\x14\x43ircuitResultPayload\x12\x0f\n\x07task_id\x18\x01 \x01(\t\x12=\n\x0c\x64istribution\x18\x02 \x03(\x0b\x32\'.CircuitResultPayload.DistributionEntry\x1a\x33\n\x11\x44istributionEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x05:\x02\x38\x01\"\x8f\x01\n\x11TestResultPayload\x12\x0f\n\x07task_id\x18\x01 \x01(\t\x12\x36\n\nparameters\x18\x02 \x03(\x0b\x32\".TestResultPayload.ParametersEntry\x1a\x31\n\x0fParametersEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x01:\x02\x38\x01\"E\n\x11\x43ontrolAckPayload\x12\x0f\n\x07task_id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x0f\n\x07message\x18\x03 \x01(\t\"\xca\x01\n\x11GetResultResponse\x12\r\n\x05\x66ound\x18\x01 \x01(\x08\x12\x15\n\rerror_message\x18\x02 \x01(\t\x12/\n\x0e\x63ircuit_result\x18\x03 \x01(\x0b\x32\x15.CircuitResultPayloadH\x00\x12)\n\x0btest_result\x18\x04 \x01(\x0b\x32\x12.TestResultPayloadH\x00\x12)\n\x0b\x63ontrol_ack\x18\x05 \x01(\x0b\x32\x12.ControlAckPayloadH\x00\x42\x08\n\x06result2\xfd\x01\n\x0bQPUExecutor\x12+\n\x04Ping\x12\x10.ExecutorRequest\x1a\x11.ExecutorResponse\x12J\n\x11SubmitCircuitTask\x12\x19.SubmitCircuitTaskRequest\x1a\x1a.SubmitCircuitTaskResponse\x12\x41\n\x0eSubmitTestTask\x12\x16.SubmitTestTaskRequest\x1a\x17.SubmitTestTaskResponse\x12\x32\n\tGetResult\x12\x11.GetResultRequest\x1a\x12.GetResultResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'src.lccfq_backend.api.protos.qpu_service_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
+  _globals['_CIRCUITRESULTPAYLOAD_DISTRIBUTIONENTRY']._loaded_options = None
+  _globals['_CIRCUITRESULTPAYLOAD_DISTRIBUTIONENTRY']._serialized_options = b'8\001'
+  _globals['_TESTRESULTPAYLOAD_PARAMETERSENTRY']._loaded_options = None
+  _globals['_TESTRESULTPAYLOAD_PARAMETERSENTRY']._serialized_options = b'8\001'
   _globals['_EXECUTORREQUEST']._serialized_start=50
   _globals['_EXECUTORREQUEST']._serialized_end=84
   _globals['_EXECUTORRESPONSE']._serialized_start=86
@@ -45,6 +49,20 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_SUBMITTESTTASKREQUEST']._serialized_end=442
   _globals['_SUBMITTESTTASKRESPONSE']._serialized_start=444
   _globals['_SUBMITTESTTASKRESPONSE']._serialized_end=519
-  _globals['_QPUEXECUTOR']._serialized_start=522
-  _globals['_QPUEXECUTOR']._serialized_end=723
+  _globals['_GETRESULTREQUEST']._serialized_start=521
+  _globals['_GETRESULTREQUEST']._serialized_end=556
+  _globals['_CIRCUITRESULTPAYLOAD']._serialized_start=559
+  _globals['_CIRCUITRESULTPAYLOAD']._serialized_end=714
+  _globals['_CIRCUITRESULTPAYLOAD_DISTRIBUTIONENTRY']._serialized_start=663
+  _globals['_CIRCUITRESULTPAYLOAD_DISTRIBUTIONENTRY']._serialized_end=714
+  _globals['_TESTRESULTPAYLOAD']._serialized_start=717
+  _globals['_TESTRESULTPAYLOAD']._serialized_end=860
+  _globals['_TESTRESULTPAYLOAD_PARAMETERSENTRY']._serialized_start=811
+  _globals['_TESTRESULTPAYLOAD_PARAMETERSENTRY']._serialized_end=860
+  _globals['_CONTROLACKPAYLOAD']._serialized_start=862
+  _globals['_CONTROLACKPAYLOAD']._serialized_end=931
+  _globals['_GETRESULTRESPONSE']._serialized_start=934
+  _globals['_GETRESULTRESPONSE']._serialized_end=1136
+  _globals['_QPUEXECUTOR']._serialized_start=1139
+  _globals['_QPUEXECUTOR']._serialized_end=1392
 # @@protoc_insertion_point(module_scope)
