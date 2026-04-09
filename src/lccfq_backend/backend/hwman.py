@@ -338,17 +338,28 @@ class RealHWManClient(BaseHWManClient):
         }
 
     def get_observables(self) -> QPUObservables:
-        """
-        Query observables from the real QPU via hwman.
-
-        Note: This method needs to be implemented based on the actual hwman API
-        for querying qubit observables. Currently raises NotImplementedError.
-        """
         logger.info("Querying observables from real QPU.")
-        raise NotImplementedError(
-            "get_observables is not yet implemented for RealHWManClient. "
-            "The hwman gRPC API needs to expose methods to query qubit observables."
-        )
+        response = self.client.get_observables()
+        if response is None or not response.status:
+            raise RuntimeError("Failed to get observables from hwman server")
+        qubits = {}
+        for qp in response.qubits:
+            idx = int(qp.qubit_id[1:]) - 1  # q01→0, q02→1
+            qubits[idx] = QubitObservable(
+                t1=qp.t1,
+                t2=qp.t2,
+                anharmonicity=qp.anharmonicity,
+                frequency=qp.frequency,
+                gate_fidelity_1q=qp.gate_fidelity_1q,
+                gate_fidelity_2q=qp.gate_fidelity_2q,
+                rx_duration=qp.rx_duration,
+                ry_duration=qp.ry_duration,
+                sqrt_iswap_duration=qp.sqrt_iswap_duration,
+                reset_duration=qp.reset_duration,
+                measurement_duration=qp.measurement_duration,
+                max_circuit_depth=qp.max_circuit_depth,
+            )
+        return QPUObservables(qubits=qubits)
 
     def retune(self) -> Tuple[HWManStatus, Optional[str], Optional[Dict[int, QubitObservable]]]:
         """
