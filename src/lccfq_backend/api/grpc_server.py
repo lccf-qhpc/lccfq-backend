@@ -10,6 +10,7 @@ import grpc
 from lccfq_backend.api.protobufs_compiled import qpu_service_pb2_grpc
 from lccfq_backend.api.services.executor_service import ExecutorService
 from lccfq_backend.backend.executor import QPUExecutor
+from lccfq_backend.backend.result_store import ResultStore
 from lccfq_backend.api.certificates import CertificateManager
 from lccfq_backend.utils.log import setup_logger
 
@@ -26,6 +27,7 @@ class GRPCServer:
         port: int = 50052,
         cert_dir: str | Path = "./certs",
         max_workers: int = 10,
+        result_store: ResultStore | None = None,
     ):
         """
         Initialize the gRPC Server.
@@ -42,6 +44,7 @@ class GRPCServer:
         self.port = port
         self.cert_dir = Path(cert_dir)
         self.max_workers = max_workers
+        self.result_store = result_store
 
         self.server_cert: bytes | None = None
         self.server_key: bytes | None = None
@@ -90,7 +93,7 @@ class GRPCServer:
     def _initialize_services(self) -> None:
         """Initialize and register gRPC services."""
         logger.info("Initializing executor service...")
-        self.executor_service = ExecutorService(self.executor)
+        self.executor_service = ExecutorService(self.executor, result_store=self.result_store)
         qpu_service_pb2_grpc.add_QPUExecutorServicer_to_server(
             self.executor_service, self.server
         )

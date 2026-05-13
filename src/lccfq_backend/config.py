@@ -49,6 +49,10 @@ class BackendSettings(BaseSettings):
     cert_dir: Path = Field(
         default=Path("./certs"), description="Directory for mTLS certificates"
     )
+    results_dir: Path = Field(
+        default=Path("./results"),
+        description="Directory where task results are persisted as JSON files",
+    )
 
     # Hardware manager client settings
     hwman_mock_mode: bool = Field(

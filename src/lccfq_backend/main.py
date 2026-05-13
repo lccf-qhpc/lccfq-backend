@@ -27,6 +27,7 @@ import time
 
 from lccfq_backend.api.grpc_server import GRPCServer
 from lccfq_backend.backend.executor import QPUExecutor, QPUQueueEmpty
+from lccfq_backend.backend.result_store import ResultStore
 from lccfq_backend.config import config
 from lccfq_backend.daemon.watchdog import start_watchdog
 from lccfq_backend.utils.log import setup_logger
@@ -82,8 +83,9 @@ def main():
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
 
-    # Create executor instance (shared between main loop and gRPC server)
-    executor = QPUExecutor()
+    # Create result store and executor (shared between main loop and gRPC server)
+    result_store = ResultStore(results_dir=config.results_dir)
+    executor = QPUExecutor(result_store=result_store)
 
     # Start gRPC server in background thread if enabled in config
     grpc_server = None
@@ -95,7 +97,8 @@ def main():
             address=config.grpc_address,
             port=config.grpc_port,
             cert_dir=config.cert_dir,
-            max_workers=config.grpc_max_workers
+            max_workers=config.grpc_max_workers,
+            result_store=result_store,
         )
         grpc_server_thread = threading.Thread(target=grpc_server.serve, daemon=True)
         grpc_server_thread.start()

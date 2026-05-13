@@ -12,6 +12,8 @@ from lccfq_backend.api.protobufs_compiled.qpu_service_pb2 import (
     SubmitCircuitTaskResponse,
     SubmitTestTaskRequest,
     SubmitTestTaskResponse,
+    GetResultRequest,
+    GetResultResponse,
     Gate as ProtoGate,
 )
 from lccfq_backend.model.tasks import Gate
@@ -209,4 +211,30 @@ class Client:
 
         except grpc.RpcError as e:
             logger.error(f"gRPC error during SubmitTestTask: {e.code()} - {e.details()}")
+            raise e
+
+    def get_result(self, task_id: str) -> GetResultResponse:
+        """
+        Retrieve a task result by task ID.
+
+        Args:
+            task_id: UUID of the task whose result is requested
+
+        Returns:
+            GetResultResponse — check .found; if True, exactly one of
+            .circuit_result, .test_result, or .control_ack will be set.
+
+        Raises:
+            grpc.RpcError: If the RPC call fails
+        """
+        try:
+            assert self.executor_stub is not None, "Executor stub is not initialized."
+            response = self.executor_stub.GetResult(GetResultRequest(task_id=task_id))
+            if response.found:
+                logger.info(f"Result retrieved for task {task_id}")
+            else:
+                logger.info(f"No result for task {task_id}: {response.error_message}")
+            return response
+        except grpc.RpcError as e:
+            logger.error(f"gRPC error during GetResult: {e.code()} - {e.details()}")
             raise e

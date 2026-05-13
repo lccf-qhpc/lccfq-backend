@@ -45,8 +45,44 @@ message SubmitTestTaskResponse {
   string message = 3;                   // Optional message (e.g., error details)
 }
 
+// Request to retrieve a result by task ID
+message GetResultRequest {
+  string task_id = 1;
+}
+
+// A circuit result payload
+message CircuitResultPayload {
+  string task_id = 1;
+  map<string, int32> distribution = 2;
+}
+
+// A test result payload
+message TestResultPayload {
+  string task_id = 1;
+  map<string, double> parameters = 2;
+}
+
+// A control ack payload
+message ControlAckPayload {
+  string task_id = 1;
+  string status = 2;
+  string message = 3;
+}
+
+// Response carrying exactly one result type, or a not-found signal
+message GetResultResponse {
+  bool found = 1;
+  string error_message = 2;
+  oneof result {
+    CircuitResultPayload circuit_result = 3;
+    TestResultPayload    test_result    = 4;
+    ControlAckPayload    control_ack    = 5;
+  }
+}
+
 service QPUExecutor {
   rpc Ping(ExecutorRequest) returns (ExecutorResponse);
   rpc SubmitCircuitTask(SubmitCircuitTaskRequest) returns (SubmitCircuitTaskResponse);
   rpc SubmitTestTask(SubmitTestTaskRequest) returns (SubmitTestTaskResponse);
+  rpc GetResult(GetResultRequest) returns (GetResultResponse);
 }
