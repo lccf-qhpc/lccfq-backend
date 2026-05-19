@@ -84,6 +84,66 @@ def cert_setup_server(
     typer.echo("  Start the server: uv run backend start")
 
 
+@cert_app.command("create-client")
+def cert_create_client(
+    user_id: Annotated[str, typer.Argument(help="User ID for the certificate")],
+    cert_dir: Annotated[
+        str, typer.Option("--cert-dir", help="Certificate directory")
+    ] = "./certs",
+) -> None:
+    """Create a client certificate for a specific user."""
+    cert_manager = CertificateManager(Path(cert_dir))
+
+    if not (cert_manager.ca_cert_file.exists() and cert_manager.server_cert_file.exists()):
+        typer.echo("Error: Server certificates not found.", err=True)
+        typer.echo("Run setup-server first: uv run backend cert setup-server", err=True)
+        raise typer.Exit(1)
+
+    try:
+        client_cert_file, client_key_file = cert_manager.create_client_certificate(user_id)
+        typer.echo(f"Client certificate created for user: {user_id}")
+        typer.echo(f"  Certificate: {client_cert_file}")
+        typer.echo(f"  Private key: {client_key_file}")
+        typer.echo("\nCertificate details:")
+        _display_certificate_info(client_cert_file)
+    except Exception as e:
+        typer.echo(f"Failed to create client certificate: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@cert_app.command("list-clients")
+def cert_list_clients(
+    cert_dir: Annotated[
+        str, typer.Option("--cert-dir", help="Certificate directory")
+    ] = "./certs",
+) -> None:
+    """List all existing client certificates."""
+    cert_manager = CertificateManager(Path(cert_dir))
+    clients = cert_manager.list_client_certificates()
+
+    if not clients:
+        typer.echo("No client certificates found.")
+        typer.echo("Create one with: uv run backend cert create-client <user_id>")
+        return
+
+    typer.echo(f"Found {len(clients)} client certificate(s):")
+    for user_id, (cert_path, key_path) in clients.items():
+        typer.echo(f"\nUser: {user_id}")
+        typer.echo(f"  Certificate: {cert_path}")
+        typer.echo(f"  Private key: {key_path}")
+        try:
+            with open(cert_path, "rb") as f:
+                cert = x509.load_pem_x509_certificate(f.read())
+            now = datetime.now(timezone.utc)
+            expires = cert.not_valid_after_utc
+            if expires > now:
+                typer.echo(f"  Status: Valid (expires in {(expires - now).days} days)")
+            else:
+                typer.echo("  Status: Expired")
+        except Exception as e:
+            typer.echo(f"  Status: Could not read certificate: {e}")
+
+
 @cert_app.command("status")
 def cert_status(
     cert_dir: Annotated[
