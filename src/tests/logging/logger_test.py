@@ -365,9 +365,10 @@ class TestQueueEnrichedMessages:
 
 class TestWatchdogEnrichedMessages:
     def test_watchdog_tracks_consecutive_failures(self, tmp_path, monkeypatch, caplog):
+        from lccfq_backend.config import BackendSettings
         from lccfq_backend.daemon.watchdog import QPUWatchdog
 
-        watchdog = QPUWatchdog(interval=1)
+        watchdog = QPUWatchdog(config=BackendSettings(hwman_mock_mode=True), interval=1)
         watchdog.status_file = str(tmp_path / "qpu_status.flag")
 
         # Mock ping to return False

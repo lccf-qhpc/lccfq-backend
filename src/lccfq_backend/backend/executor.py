@@ -16,8 +16,9 @@ from ..model.results import CircuitResult, TestResult, ControlAck, TaskResult
 from .queue import QPUTaskQueue, QueueEntry
 from .fsm import QPUAbstraction, QPUEvent, QPUState
 from .error import UnknownQPUTaskType, QPUQueueEmpty
-from .hwman import HWManClient, HWManStatus
+from .hwman import make_hwman_client, HWManStatus
 from .result_store import ResultStore
+from ..config import BackendSettings
 from ..utils.log import setup_logger
 
 
@@ -26,9 +27,9 @@ logger = setup_logger("lccfq.executor")
 class QPUExecutor:
     """Representation of the QPU executor"""
 
-    def __init__(self, result_store: Optional[ResultStore] = None):
+    def __init__(self, config: BackendSettings, result_store: Optional[ResultStore] = None):
         self.qpu = QPUAbstraction()
-        self.hwman = HWManClient()
+        self.hwman = make_hwman_client(config)
         self.queue = QPUTaskQueue()
         self.result_store = result_store
 

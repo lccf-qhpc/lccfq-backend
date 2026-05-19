@@ -11,7 +11,8 @@ import time
 import threading
 from multiprocessing import Event
 from ..utils.log import setup_logger
-from ..backend.hwman import HWManClient
+from ..backend.hwman import make_hwman_client
+from ..config import BackendSettings
 from ..slurm.exporter import export_observables
 
 logger = setup_logger("lccfq.watchdog")
@@ -20,9 +21,9 @@ logger = setup_logger("lccfq.watchdog")
 class QPUWatchdog:
     """Watchdog to check QPU health and availability periodically."""
 
-    def __init__(self, interval: int = 300):
+    def __init__(self, config: BackendSettings, interval: int = 300):
         self.interval = interval
-        self.hwman = HWManClient()
+        self.hwman = make_hwman_client(config)
         self.stop_event = Event()
         self.status_file = "/tmp/qpu_status.flag"  # Readable by SLURM or systemd unit
         self._check_count = 0
@@ -87,7 +88,7 @@ class QPUWatchdog:
         self.stop_event.set()
         self.write_status(False)
 
-def start_watchdog(interval: int = 300) -> QPUWatchdog:
+def start_watchdog(config: BackendSettings, interval: int = 300) -> QPUWatchdog:
     """
     Starts the watchdog in a background thread.
     Returns the watchdog instance so it can be stopped externally.
@@ -95,7 +96,7 @@ def start_watchdog(interval: int = 300) -> QPUWatchdog:
     """
     logger.info(f"Preparing to start watchdog thread with interval = {interval} sec.")
 
-    watchdog = QPUWatchdog(interval=interval)
+    watchdog = QPUWatchdog(config=config, interval=interval)
 
     try:
         thread = threading.Thread(target=watchdog.run, daemon=True)

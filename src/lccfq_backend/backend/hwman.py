@@ -14,12 +14,12 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import List, Dict, Tuple, Optional
 
-from hwman.client.client import Client as HWManGRPCClient
+from hwman.client import Client as HWManGRPCClient
 
 from ..model.tasks import Gate
 from ..model.observables import QubitObservable, QPUObservables
 from ..utils.log import setup_logger
-from ..config import config
+from ..config import BackendSettings
 
 logger = setup_logger("lccfq.hwman")
 
@@ -247,14 +247,9 @@ class MockHWManClient(BaseHWManClient):
 class RealHWManClient(BaseHWManClient):
     """Real implementation of hardware manager client using gRPC."""
 
-    def __init__(self):
-        """
-        Initialize the real hardware manager client with gRPC connection.
-        Configuration is loaded from the backend settings.
-        """
+    def __init__(self, config: BackendSettings):
         logger.info("Initializing RealHWManClient...")
 
-        # Initialize the gRPC client with configuration from settings
         self.client = HWManGRPCClient(
             name=config.hwman_client_name,
             address=config.hwman_address,
@@ -451,4 +446,9 @@ class RealHWManClient(BaseHWManClient):
 
 
 
-HWManClient = MockHWManClient if config.hwman_mock_mode else RealHWManClient
+def make_hwman_client(config: BackendSettings) -> BaseHWManClient:
+    """Return the appropriate client based on config. Deferred so the CLI can
+    resolve config before this decision is made, rather than at import time."""
+    if config.hwman_mock_mode:
+        return MockHWManClient()
+    return RealHWManClient(config)

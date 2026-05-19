@@ -18,6 +18,9 @@ dependencies = [
     "lccfq-hwman",
 ]
 
+[project.scripts]
+backend = "lccfq_backend.cli.main:main"
+
 [build-system]
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"

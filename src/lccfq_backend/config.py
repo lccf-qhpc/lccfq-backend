@@ -182,7 +182,3 @@ class BackendSettings(BaseSettings):
             Dictionary representation
         """
         return self.model_dump(mode="python")
-
-
-# Singleton config instance - single source of truth for the entire application
-config = BackendSettings()

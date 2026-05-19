@@ -1,10 +1,14 @@
 import pytest
 from lccfq_backend.backend.executor import QPUExecutor
+from lccfq_backend.config import BackendSettings
 from lccfq_backend.model.tasks import CircuitTask, TestTask, ControlTask, TaskType, Gate
 from lccfq_backend.backend.error import UnknownQPUTaskType
 
+_config = BackendSettings(hwman_mock_mode=True)
+
+
 def test_execute_circuit_task():
-    executor = QPUExecutor()
+    executor = QPUExecutor(config=_config)
     task = CircuitTask(
         task_id="circuit-001",
         type=TaskType.CIRCUIT,
@@ -17,7 +21,7 @@ def test_execute_circuit_task():
 
 
 def test_execute_test_task():
-    executor = QPUExecutor()
+    executor = QPUExecutor(config=_config)
     task = TestTask(
         task_id="test-001",
         type=TaskType.TEST,
@@ -32,7 +36,7 @@ def test_execute_test_task():
 
 
 def test_execute_control_reset():
-    executor = QPUExecutor()
+    executor = QPUExecutor(config=_config)
     task = ControlTask(
         task_id="control-001",
         type=TaskType.CONTROL,
@@ -44,7 +48,7 @@ def test_execute_control_reset():
 
 
 def test_execute_control_unknown_command():
-    executor = QPUExecutor()
+    executor = QPUExecutor(config=_config)
     task = ControlTask(
         task_id="control-003",
         type=TaskType.CONTROL,
@@ -57,7 +61,7 @@ def test_execute_control_unknown_command():
 
 
 def test_execute_unknown_task_type():
-    executor = QPUExecutor()
+    executor = QPUExecutor(config=_config)
 
     class FakeTask:
         def __init__(self):

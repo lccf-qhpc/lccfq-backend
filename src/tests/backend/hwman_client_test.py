@@ -9,12 +9,15 @@ Description:
 License: Apache 2.0
 Contact: nunezco2@illinois.edu
 """
-from lccfq_backend.backend.hwman import HWManClient
+from lccfq_backend.backend.hwman import make_hwman_client
+from lccfq_backend.config import BackendSettings
 from lccfq_backend.model.tasks import Gate
+
+_config = BackendSettings(hwman_mock_mode=True)
 
 
 def test_run_circuit_returns_expected_distribution():
-    client = HWManClient()
+    client = make_hwman_client(_config)
     gates = [
         Gate(symbol="rx", target_qubits=[0], control_qubits=[], params=[1.57]),
         Gate(symbol="sqiswap", target_qubits=[1], control_qubits=[0], params=[])
@@ -29,7 +32,7 @@ def test_run_circuit_returns_expected_distribution():
 
 
 def test_run_test_returns_expected_metrics():
-    client = HWManClient()
+    client = make_hwman_client(_config)
     symbol = "xeb"
     params = [0, 1]
     shots = 512
