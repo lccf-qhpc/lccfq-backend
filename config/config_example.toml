@@ -6,6 +6,7 @@
 log_level = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
 
 # Calibration settings
+with_calibration = true
 calibration_interval = 86400
 calibration_state = "./last_calib.state"
 

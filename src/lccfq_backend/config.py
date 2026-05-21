@@ -28,13 +28,15 @@ class BackendSettings(BaseSettings):
     )
 
     # Calibration settings
+    with_calibration: bool = Field(
+        default=True, description="Enable periodic QPU calibration"
+    )
     calibration_interval: int = Field(
         default=3600 * 24, description="Interval in seconds for periodic QPU calibration"
     )
-
     calibration_state: Path = Field(
         default=Path("./last_calib.state"),
-        description="Path to file where calibration state is persisted, make blank to disable",
+        description="Path to file where calibration state is persisted",
     )
 
     # Watchdog settings
@@ -114,6 +116,16 @@ class BackendSettings(BaseSettings):
         """Validate interval is zero or positive (for optional intervals)."""
         if v < 0:
             raise ValueError(f"Interval must be zero or positive, got {v}")
+        return v
+
+    @field_validator("calibration_state")
+    @classmethod
+    def validate_calibration_state(cls, v: Path) -> Path:
+        if v.is_dir():
+            raise ValueError(f"calibration_state must be a file path, not a directory: {v}")
+        if not v.exists():
+            logger.info(f"Calibration state file not found at {v}. Creating empty file.")
+            v.touch()
         return v
 
     @field_validator("grpc_port", "hwman_port")

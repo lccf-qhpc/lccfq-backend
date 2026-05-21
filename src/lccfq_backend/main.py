@@ -45,24 +45,18 @@ def handle_signal(signum, frame):
     shutdown_flag = True
 
 
-def start_loop(executor: QPUExecutor, poll_interval: int = 10):
+def start_loop(executor: QPUExecutor, config: BackendSettings, poll_interval: int = 10):
     """Start the backend service loop that monitors and executes QPU tasks."""
     logger.info("Starting LCCFQ backend main loop.")
 
-    # Grab the start time for calibration scheduling
-
     start = time.time()
 
-    # Determine if the calibration state file exists
-
-    if not config.calibration_state.is_dir() and config.calibration_state.exists():
-        logger.info(f"Calibration state file found at {config.calibration_state}. Loading state.")
+    if config.with_calibration:
         try:
-            with open(config.calibration_state, "r") as f:
-                last_calib_time = float(f.read().strip())
-                # Set the start time to the last calibration time to maintain the schedule
-                start = last_calib_time
-                logger.info(f"Loaded last calibration time: {time.ctime(last_calib_time)}")
+            content = config.calibration_state.read_text().strip()
+            if content:
+                start = float(content)
+                logger.info(f"Loaded last calibration time: {time.ctime(start)}")
         except Exception as e:
             logger.warning(f"Failed to load calibration state: {e}. Starting with current time.")
 
@@ -70,26 +64,15 @@ def start_loop(executor: QPUExecutor, poll_interval: int = 10):
         try:
             if executor.is_qpu_online():
 
-                # First, determine if it's time to run a calibration task
-
-                elapsed = time.time() - start
-
-                if config.calibration_interval > 0 and elapsed >= config.calibration_interval:
+                if config.with_calibration and time.time() - start >= config.calibration_interval:
                     logger.info("Calibration interval reached. Scheduling calibration task.")
                     executor.hwman.retune()
-                    start = time.time()  # Reset the timer after scheduling calibration
-
-                    # Persist the calibration time to the state file
-
-                    if not config.calibration_state.is_dir():
-
-                        try:
-                            with open(config.calibration_state, "w") as f:
-                                f.write(str(start))
-                            logger.info(f"Calibration time saved to {config.calibration_state}.")
-                        except Exception as e:
-                            logger.warning(f"Failed to save calibration state: {e}.")
-
+                    start = time.time()
+                    try:
+                        config.calibration_state.write_text(str(start))
+                        logger.info(f"Calibration time saved to {config.calibration_state}.")
+                    except Exception as e:
+                        logger.warning(f"Failed to save calibration state: {e}.")
                     continue
 
                 result = executor._execute_next()
@@ -142,7 +125,7 @@ def main(config: BackendSettings) -> None:
         watchdog = start_watchdog(config=config, interval=config.watchdog_interval)
 
     try:
-        start_loop(executor)
+        start_loop(executor, config)
     finally:
         if watchdog:
             logger.info("Stopping watchdog thread.")
