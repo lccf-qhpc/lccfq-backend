@@ -45,7 +45,7 @@ class UserManager:
                 for group in self.groups.values()
             ],
             'users': [
-                user.model_dump()
+                {**user.model_dump(exclude={'groups'}), 'groups': [g.name for g in user.groups]}
                 for user in self.users.values()
             ]
         }
@@ -72,8 +72,8 @@ class UserManager:
         # Load each user and their respective groups
 
         for user_data in data.get('users', []):
-            user_groups = [self.groups[group_name] for group_name in user_data.get('groups', [])]
-            user = User.model_validate(user_data, context={'groups': user_groups})
+            user_groups = [self.groups[g_name] for g_name in user_data.get('groups', [])]
+            user = User.model_validate({**user_data, 'groups': user_groups})
             self.users[user.name] = user
 
     def add_user(self, user: User):
@@ -157,3 +157,105 @@ class UserManager:
                 return True
 
         return False
+
+    def get_group(self, name: str) -> Group:
+        """Get a group by name.
+
+        :param name: The name of the group to get.
+        :return: The group with the given name.
+        """
+        return self.groups[name]
+    
+    def has_group(self, name: str) -> bool:
+        """Check if a group exists.
+
+        :param name: The name of the group to check.
+        :return: True if the group exists, False otherwise.
+        """
+        return name in self.groups
+    
+    def create_group(self, name: str, perms: Permissions = Permissions(0)) -> Group:
+        """Create a new group.
+
+        :param name: The name of the group to create.
+        :param perms: The permissions for the group.
+        :return: The newly created group.
+        """
+
+        group = Group(name=name, perms=perms, id=0)
+        self.groups[group.name] = group
+        return group
+
+    def remove_group(self, name: str):
+        """Remove a group.
+
+        :param name: The name of the group to remove.
+        """
+        if not self.has_group(name):
+            raise ValueError(f"Group '{name}' does not exist.")
+
+        group = self.groups.pop(name)
+
+        # Also remove this group from any users that are part of it
+
+        for user in self.users.values():
+            if group in user.groups:
+                user.groups.remove(group)
+
+    def add_user_to_group(self, user_name: str, group_name: str):
+        """Add a user to a group.
+
+        :param user_name: The name of the user to add to the group.
+        :param group_name: The name of the group to add the user to.
+        """
+        if not self.has_user(user_name):
+            raise ValueError(f"User '{user_name}' does not exist.")
+        if not self.has_group(group_name):
+            raise ValueError(f"Group '{group_name}' does not exist.")
+
+        user = self.get_user(user_name)
+        group = self.get_group(group_name)
+
+        if group not in user.groups:
+            user.groups.append(group)
+
+    def remove_user_from_group(self, user_name: str, group_name: str):
+        """Remove a user from a group.
+
+        :param user_name: The name of the user to remove from the group.
+        :param group_name: The name of the group to remove the user from.
+        """
+        if not self.has_user(user_name):
+            raise ValueError(f"User '{user_name}' does not exist.")
+        if not self.has_group(group_name):
+            raise ValueError(f"Group '{group_name}' does not exist.")
+
+        user = self.get_user(user_name)
+        group = self.get_group(group_name)
+
+        if group in user.groups:
+            user.groups.remove(group)
+
+    def add_group_permission(self, group_name: str, permission: Permissions):
+        """Add a permission to a group.
+
+        :param group_name: The name of the group to add the permission to.
+        :param permission: The permission to add.
+        """
+        if not self.has_group(group_name):
+            raise ValueError(f"Group '{group_name}' does not exist.")
+
+        group = self.get_group(group_name)
+        group.perms |= permission
+
+    def remove_group_permission(self, group_name: str, permission: Permissions):
+        """Remove a permission from a group.
+
+        :param group_name: The name of the group to remove the permission from.
+        :param permission: The permission to remove.
+        """
+        if not self.has_group(group_name):
+            raise ValueError(f"Group '{group_name}' does not exist.")
+
+        group = self.get_group(group_name)
+        group.perms &= ~permission
