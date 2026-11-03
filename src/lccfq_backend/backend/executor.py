@@ -10,11 +10,12 @@ License: Apache 2.0
 Contact: nunezco2@illinois.edu
 """
 import time
-from typing import Union, Optional, List
+from threading import Lock
+from typing import Union, Optional, List, Dict
 
 from .users import UserManager
 from ..model.user import Permissions
-from ..model.tasks import CircuitTask, TestTask, ControlTask, TaskType, TaskBase
+from ..model.tasks import CircuitTask, TestTask, ControlTask, TaskType, TaskBase, TaskStatus
 from ..model.results import CircuitResult, TestResult, ControlAck, TaskResult
 from .queue import QPUTaskQueue, QueueEntry
 from .fsm import QPUAbstraction, QPUEvent, QPUState
@@ -36,8 +37,91 @@ class QPUExecutor:
         self.queue = QPUTaskQueue()
         self.result_store = result_store
         self.users = users
+        self._task_statuses: Dict[str, TaskStatus] = {}
+        self._task_status_lock = Lock()
+        self._task_logs: Dict[str, List[str]] = {}
+        self._task_logs_lock = Lock()
 
         logger.info("QPUExecutor initialized")
+
+    def set_task_status(self, task_id: str, status: TaskStatus) -> None:
+        """Store the current lifecycle status of a task"""
+        with self._task_status_lock:
+            self._task_statuses[task_id] = status
+
+        self.append_task_log(
+            task_id,
+            f"Task status changed to {status.value}",
+        )
+
+        logger.info(f"Task {task_id} status updated to {status.value}")
+
+    def get_task_status(self, task_id: str) -> Optional[TaskStatus]:
+        """Return the current lifecycle status of a task"""
+        with self._task_status_lock:
+            return self._task_statuses.get(task_id)
+
+    def append_task_log(self, task_id: str, message: str) -> None:
+        """Append a lifecycle log message for a task."""
+        with self._task_logs_lock:
+            self._task_logs.setdefault(task_id, []).append(message)
+
+    def get_task_logs(self, task_id: str) -> Optional[List[str]]:
+        """Return a copy of the lifecycle log messages for a task."""
+        with self._task_logs_lock:
+            logs = self._task_logs.get(task_id)
+            return list(logs) if logs is not None else None
+
+    def enqueue_task(
+        self,
+        task: TaskBase,
+        user: str,
+        context_id: Optional[str] = None,
+        priority: int = 0,
+    ) -> QueueEntry:
+        """Enqueue a task and record its initial lifecycle status atomically."""
+
+        with self._task_status_lock:
+            entry = self.queue.enqueue(
+                task=task,
+                user=user,
+                context_id=context_id,
+                priority=priority,
+            )
+
+            self._task_statuses[task.task_id] = TaskStatus.QUEUED
+
+            self.append_task_log(
+                task.task_id,
+                f"Task status changed to {TaskStatus.QUEUED.value}",
+            )
+
+        logger.info(f"Task {task.task_id} status updated to {TaskStatus.QUEUED.value}")
+        return entry
+
+    def cancel_task(self, task_id: str) -> bool:
+        """Cancel a queued task"""
+
+        with self._task_status_lock:
+            status = self._task_statuses.get(task_id)
+
+            if status != TaskStatus.QUEUED:
+                return False
+
+            removed = self.queue.remove(task_id)
+
+            if not removed:
+                return False
+
+            self._task_statuses[task_id] = TaskStatus.CANCELLED
+
+        self.append_task_log(
+            task_id,
+            f"Task status changed to {TaskStatus.CANCELLED.value}",
+        )
+
+        logger.info(f"Task {task_id} cancelled")
+        return True
 
     def is_qpu_online(self) -> bool:
         try:
@@ -59,7 +143,7 @@ class QPUExecutor:
             logger.error(f"Unsupported task type: {task.type}")
             raise UnknownQPUTaskType(f"Unsupported task type: {task.type}")
 
-        entry = self.queue.enqueue(
+        entry = self.enqueue_task(
             task=task,
             user=user,
             context_id=context_id,
@@ -72,22 +156,37 @@ class QPUExecutor:
             logger.warning(f"QPU busy (state: {self.qpu.state}), deferring task {task.task_id}")
             return None
 
-        return self._dispatch(entry)
+        if not self.queue.remove(task.task_id):
+            logger.info(
+                f"Task {task.task_id} was already claimed by another execution path"
+            )
+            return None
+
+        return self._dispatch(entry.task)
 
     def _dispatch(self, task: Union[CircuitTask, TestTask, ControlTask]) -> Optional[Union[CircuitResult, TestResult, ControlAck]]:
-        match task.type:
-            case TaskType.CIRCUIT:
-                result = self._execute_circuit(task)
-            case TaskType.TEST:
-                result = self._execute_test(task)
-            case TaskType.CONTROL:
-                result = self._execute_control(task)
-            case _:
-                logger.error(f"Unknown task type dispatched: {task.type}")
-                raise UnknownQPUTaskType(task.type)
+        self.set_task_status(task.task_id, TaskStatus.RUNNING)
 
-        if self.result_store and result is not None:
-            self.result_store.save(result)
+        try:
+            match task.type:
+                case TaskType.CIRCUIT:
+                    result = self._execute_circuit(task)
+                case TaskType.TEST:
+                    result = self._execute_test(task)
+                case TaskType.CONTROL:
+                    result = self._execute_control(task)
+                case _:
+                    logger.error(f"Unknown task type dispatched: {task.type}")
+                    raise UnknownQPUTaskType(task.type)
+
+            if self.result_store and result is not None:
+                self.result_store.save(result)
+
+        except Exception:
+            self.set_task_status(task.task_id, TaskStatus.FAILED)
+            raise
+
+        self.set_task_status(task.task_id, TaskStatus.COMPLETED)
         self._handle_deferred_tasks()
         return result
 
@@ -119,20 +218,29 @@ class QPUExecutor:
             task: TaskBase = entry.task
             logger.debug(f"Executing task {task.task_id} in context {entry.context_id}")
 
-            match task.type:
-                case TaskType.CIRCUIT:
-                    result = self._execute_circuit(task)
-                case TaskType.TEST:
-                    result = self._execute_test(task)
-                case TaskType.CONTROL:
-                    result = self._execute_control(task)
-                case _:
-                    logger.error(f"Unknown task type in batch: {task.type}")
-                    raise UnknownQPUTaskType(task.type)
+            self.set_task_status(task.task_id, TaskStatus.RUNNING)
 
+            try:
+                match task.type:
+                    case TaskType.CIRCUIT:
+                        result = self._execute_circuit(task)
+                    case TaskType.TEST:
+                        result = self._execute_test(task)
+                    case TaskType.CONTROL:
+                        result = self._execute_control(task)
+                    case _:
+                        logger.error(f"Unknown task type in batch: {task.type}")
+                        raise UnknownQPUTaskType(task.type)
+
+                if self.result_store and result is not None:
+                    self.result_store.save(result)
+
+            except Exception:
+                self.set_task_status(task.task_id, TaskStatus.FAILED)
+                raise
+
+            self.set_task_status(task.task_id, TaskStatus.COMPLETED)
             results.append(result)
-            if self.result_store and result is not None:
-                self.result_store.save(result)
 
         batch_elapsed = time.monotonic() - batch_start
         logger.info(

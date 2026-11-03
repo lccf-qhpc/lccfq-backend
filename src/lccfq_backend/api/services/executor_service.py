@@ -18,15 +18,36 @@ from lccfq_backend.api.protobufs_compiled.qpu_service_pb2 import (
     CircuitResultPayload,
     TestResultPayload,
     ControlAckPayload,
+    GetTaskStatusRequest,
+    GetTaskStatusResponse,
+    TASK_STATUS_QUEUED,
+    TASK_STATUS_RUNNING,
+    TASK_STATUS_COMPLETED,
+    TASK_STATUS_FAILED,
+    TASK_STATUS_CANCELLED,
+    CancelTaskRequest,
+    CancelTaskResponse,
+    GetTargetRequest,
+    GetTargetResponse,
+    GetTaskLogsRequest,
+    GetTaskLogsResponse,
 )
 from lccfq_backend.backend.executor import QPUExecutor
 from lccfq_backend.backend.result_store import ResultStore
-from lccfq_backend.model.tasks import CircuitTask, TestTask, Gate
+from lccfq_backend.model.tasks import CircuitTask, TestTask, Gate, TaskStatus
 from lccfq_backend.model.results import CircuitResult, TestResult, ControlAck
 from lccfq_backend.backend.error import UnknownQPUTaskType
 from lccfq_backend.utils.log import setup_logger
 
 logger = setup_logger("ExecutorService")
+
+_TASK_STATUS_TO_PROTO = {
+    TaskStatus.QUEUED: TASK_STATUS_QUEUED,
+    TaskStatus.RUNNING: TASK_STATUS_RUNNING,
+    TaskStatus.COMPLETED: TASK_STATUS_COMPLETED,
+    TaskStatus.FAILED: TASK_STATUS_FAILED,
+    TaskStatus.CANCELLED: TASK_STATUS_CANCELLED,
+}
 
 
 class ExecutorService(QPUExecutorServicer):
@@ -104,20 +125,16 @@ class ExecutorService(QPUExecutorServicer):
 
             # Create CircuitTask (auto-generates task_id via UUID)
             circuit_task = CircuitTask(
+                user=user_id,
                 gates=gates,
                 shots=request.shots,
             )
 
-            # Enqueue task directly in queue (async - don't execute immediately)
-            # Using default priority=0 and no context_id for simplicity
-            # NOTE: We call queue.enqueue() directly instead of executor.execute()
-            # because execute() would immediately dispatch if QPU is idle,
-            # but we want async behavior - just enqueue and let main loop handle execution
-            self.executor.queue.enqueue(
+            self.executor.enqueue_task(
                 task=circuit_task,
                 user=user_id,
                 context_id=None,
-                priority=0
+                priority=0,
             )
 
             logger.info(f"Circuit task enqueued: {circuit_task.task_id} for user {user_id}")
@@ -183,21 +200,17 @@ class ExecutorService(QPUExecutorServicer):
 
             # Create TestTask (auto-generates task_id via UUID)
             test_task = TestTask(
+                user=user_id,
                 symbol=request.symbol,
                 params=list(request.params),
                 shots=request.shots,
             )
 
-            # Enqueue task directly in queue (async - don't execute immediately)
-            # Using default priority=0 and no context_id for simplicity
-            # NOTE: We call queue.enqueue() directly instead of executor.execute()
-            # because execute() would immediately dispatch if QPU is idle,
-            # but we want async behavior - just enqueue and let main loop handle execution
-            self.executor.queue.enqueue(
+            self.executor.enqueue_task(
                 task=test_task,
                 user=user_id,
                 context_id=None,
-                priority=0
+                priority=0,
             )
 
             logger.info(f"Test task enqueued: {test_task.task_id} for user {user_id}")
@@ -280,6 +293,159 @@ class ExecutorService(QPUExecutorServicer):
         logger.error(f"Unexpected result type for task {task_id}: {type(result)}")
         return GetResultResponse(found=False, error_message="Unexpected result type")
 
+    def GetTaskStatus(
+        self,
+        request: GetTaskStatusRequest,
+        context: grpc.ServicerContext,
+    ) -> GetTaskStatusResponse:
+        """
+        Retrieve the current lifecycle status of a task.
+
+        Args:
+            request: GetTaskStatusRequest with task_id
+            context: gRPC service context
+
+        Returns:
+            GetTaskStatusResponse with the current status, or found=False
+        """
+        task_id = request.task_id.strip()
+        logger.info(f"GetTaskStatus request for task_id={task_id}")
+
+        if not task_id:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details("Task ID cannot be empty")
+            return GetTaskStatusResponse(
+                found=False,
+                error_message="Task ID cannot be empty",
+            )
+
+        status = self.executor.get_task_status(task_id)
+
+        if status is None:
+            return GetTaskStatusResponse(
+                found=False,
+                error_message=f"No status for task {task_id}",
+            )
+
+        return GetTaskStatusResponse(
+            found=True,
+            status=_TASK_STATUS_TO_PROTO[status],
+        )
+
+    def CancelTask(
+        self,
+        request: CancelTaskRequest,
+        context: grpc.ServicerContext,
+    ) -> CancelTaskResponse:
+        """
+        Cancel a queued task by task ID.
+        """
+        task_id = request.task_id.strip()
+        logger.info(f"CancelTask request for task_id={task_id}")
+
+        if not task_id:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details("Task ID cannot be empty")
+            return CancelTaskResponse(
+                found=False,
+                cancelled=False,
+                error_message="Task ID cannot be empty",
+            )
+
+        status = self.executor.get_task_status(task_id)
+
+        if status is None:
+            return CancelTaskResponse(
+                found=False,
+                cancelled=False,
+                error_message=f"No status for task {task_id}",
+            )
+
+        if status != TaskStatus.QUEUED:
+            return CancelTaskResponse(
+                found=True,
+                cancelled=False,
+                error_message=(
+                    f"Task {task_id} cannot be cancelled "
+                    f"from status {status.value}"
+                ),
+            )
+
+        cancelled = self.executor.cancel_task(task_id)
+
+        if not cancelled:
+            return CancelTaskResponse(
+                found=True,
+                cancelled=False,
+                error_message=f"Task {task_id} could not be cancelled",
+            )
+
+        return CancelTaskResponse(
+            found=True,
+            cancelled=True,
+        )
+
+    def GetTarget(
+        self,
+        request: GetTargetRequest,
+        context: grpc.ServicerContext,
+    ) -> GetTargetResponse:
+        """
+        Retrieve the current QPU target information.
+        """
+        logger.info("GetTarget request received")
+
+        try:
+            observables = self.executor.hwman.get_observables()
+
+            return GetTargetResponse(
+                success=True,
+                target_json=observables.model_dump_json(),
+            )
+
+        except Exception as e:
+            logger.error(f"Error retrieving QPU target: {e}", exc_info=True)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to retrieve QPU target")
+
+            return GetTargetResponse(
+                success=False,
+                error_message=str(e),
+            )
+
+    def GetTaskLogs(
+        self,
+        request: GetTaskLogsRequest,
+        context: grpc.ServicerContext,
+    ) -> GetTaskLogsResponse:
+        """
+        Retrieve lifecycle log messages for a task.
+        """
+        task_id = request.task_id.strip()
+        logger.info(f"GetTaskLogs request for task_id={task_id}")
+
+        if not task_id:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details("Task ID cannot be empty")
+
+            return GetTaskLogsResponse(
+                found=False,
+                error_message="Task ID cannot be empty",
+            )
+
+        logs = self.executor.get_task_logs(task_id)
+
+        if logs is None:
+            return GetTaskLogsResponse(
+                found=False,
+                error_message=f"No logs for task {task_id}",
+            )
+
+        return GetTaskLogsResponse(
+            found=True,
+            logs=logs,
+        )
+
     def _extract_user_from_context(self, context: grpc.ServicerContext) -> str:
         """
         Extract user ID from the client's mTLS certificate.
@@ -314,7 +480,7 @@ class ExecutorService(QPUExecutorServicer):
                     break
 
         if not user_id:
-            logger.error(f"No client certificate CN found in auth context")
+            logger.error("No client certificate CN found in auth context")
             raise ValueError("Client certificate missing or invalid")
 
         logger.debug(f"Extracted user_id from certificate: {user_id}")
