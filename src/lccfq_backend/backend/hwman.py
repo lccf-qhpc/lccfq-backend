@@ -12,7 +12,7 @@ Contact: nunezco2@illinois.edu
 import time
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Any
 
 from hwman.client import Client as HWManGRPCClient
 
@@ -38,13 +38,13 @@ class BaseHWManClient(ABC):
     """Abstract base class for hardware manager client interface."""
 
     @abstractmethod
-    def run_circuit(self, gates: List[Gate], shots: int) -> Dict[str, int]:
+    def run_circuit(self, gates: List[Gate], shots: int) -> Dict[str, Any]:
         """
         Execute a quantum circuit on the QPU.
 
         :param gates: List of Gate objects representing the circuit
         :param shots: Number of measurement shots to perform
-        :return: Dictionary mapping bitstring outcomes to counts
+        :return: Dictionary containing the outcome distribution and raw bitstream
         """
         pass
 
@@ -129,10 +129,12 @@ class MockHWManClient(BaseHWManClient):
     def __init__(self):
         logger.info("MockHWManClient initialized.")
 
-    def run_circuit(self, gates: List[Gate], shots: int) -> Dict[str, int]:
+    def run_circuit(self, gates: List[Gate], shots: int) -> Dict[str, Any]:
         logger.info(f"Running circuit with {len(gates)} gates and {shots} shots.")
         t0 = time.monotonic()
-        result = {"000": int(0.5 * shots), "111": shots - int(0.5 * shots)}
+
+        distribution = {"000": int(0.5 * shots), "111": shots - int(0.5 * shots),}
+        result = {"distribution": distribution, "raw_bitstream":[],}
         logger.debug(f"Circuit execution completed, elapsed={time.monotonic() - t0:.3f}s")
         return result
 
@@ -265,7 +267,7 @@ class RealHWManClient(BaseHWManClient):
         self.ping()
         logger.info("Ping successful. RealHWManClient connected to hwman server.")
 
-    def run_circuit(self, gates: List[Gate], shots: int) -> Dict[str, int]:
+    def run_circuit(self, gates: List[Gate], shots: int) -> Dict[str, Any]:
         logger.info(f"Running circuit with {len(gates)} gates and {shots} shots on real QPU.")
         t0 = time.monotonic()
 

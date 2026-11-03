@@ -26,9 +26,15 @@ def test_run_circuit_returns_expected_distribution():
     result = client.run_circuit(gates, shots)
 
     assert isinstance(result, dict)
-    assert "000" in result and "111" in result
-    assert result["000"] + result["111"] == shots
-    assert all(isinstance(v, int) for v in result.values())
+    assert "distribution" in result
+    assert "raw_bitstream" in result
+
+    distribution = result["distribution"]
+
+    assert "000" in distribution and "111" in distribution
+    assert distribution["000"] + distribution["111"] == shots
+    assert all(isinstance(v, int) for v in distribution.values())
+    assert result["raw_bitstream"] == []
 
 
 def test_run_test_returns_expected_metrics():
