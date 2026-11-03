@@ -1,6 +1,7 @@
-import pytest
-from datetime import datetime
-from lccfq_backend.backend.queue import QPUTaskQueue, QueueEntry
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+
+from lccfq_backend.backend.queue import QPUTaskQueue
 from lccfq_backend.model.tasks import CircuitTask, TaskType, Gate
 from lccfq_backend.model.context import QPUExecutionContext
 
@@ -96,3 +97,30 @@ def test_dequeue_all_for_context():
     task_ids = [entry.task.task_id for entry in entries]
     assert "a" in task_ids
     assert "b" in task_ids
+
+
+def test_dequeue_and_remove_are_thread_safe():
+    queue = QPUTaskQueue()
+    queue.enqueue(make_task("shared-task"), user="alice")
+
+    barrier = Barrier(3)
+
+    def dequeue_task():
+        barrier.wait()
+        return queue.dequeue()
+
+    def remove_task():
+        barrier.wait()
+        return queue.remove("shared-task")
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        dequeue_future = executor.submit(dequeue_task)
+        remove_future = executor.submit(remove_task)
+
+        barrier.wait()
+
+        dequeued = dequeue_future.result(timeout=5)
+        removed = remove_future.result(timeout=5)
+
+    assert (dequeued is not None) != removed
+    assert queue.list_pending() == []
