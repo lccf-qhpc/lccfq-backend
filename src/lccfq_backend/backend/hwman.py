@@ -133,8 +133,8 @@ class MockHWManClient(BaseHWManClient):
         logger.info(f"Running circuit with {len(gates)} gates and {shots} shots.")
         t0 = time.monotonic()
 
-        distribution = {"000": int(0.5 * shots), "111": shots - int(0.5 * shots),}
-        result = {"distribution": distribution, "raw_bitstream":[],}
+        distribution = {"000": int(0.5 * shots), "111": shots - int(0.5 * shots)}
+        result = {"distribution": distribution, "raw_bitstream": []}
         logger.debug(f"Circuit execution completed, elapsed={time.monotonic() - t0:.3f}s")
         return result
 

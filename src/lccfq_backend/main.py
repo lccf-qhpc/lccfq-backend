@@ -68,7 +68,7 @@ def start_loop(executor: QPUExecutor, config: BackendSettings, poll_interval: in
                     continue
 
                 result = executor._execute_next()
-                logger.info(f"Task(s) executed, qpu_state={executor.qpu.state}, queue_depth={len(executor.queue._queue)}")
+                logger.info(f"Task(s) executed, qpu_state={executor.qpu.state}, queue_depth={len(executor.queue.list_pending())}")
             else:
                 logger.warning(f"QPU not available (state={executor.qpu.state}). Will retry.")
                 time.sleep(poll_interval)
