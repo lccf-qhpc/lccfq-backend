@@ -72,6 +72,33 @@ class QPUExecutor:
             logs = self._task_logs.get(task_id)
             return list(logs) if logs is not None else None
 
+    def enqueue_task(
+        self,
+        task: TaskBase,
+        user: str,
+        context_id: Optional[str] = None,
+        priority: int = 0,
+    ) -> QueueEntry:
+        """Enqueue a task and record its initial lifecycle status atomically."""
+
+        with self._task_status_lock:
+            entry = self.queue.enqueue(
+                task=task,
+                user=user,
+                context_id=context_id,
+                priority=priority,
+            )
+
+            self._task_statuses[task.task_id] = TaskStatus.QUEUED
+
+            self.append_task_log(
+                task.task_id,
+                f"Task status changed to {TaskStatus.QUEUED.value}",
+            )
+
+        logger.info(f"Task {task.task_id} status updated to {TaskStatus.QUEUED.value}")
+        return entry
+
     def cancel_task(self, task_id: str) -> bool:
         """Cancel a queued task"""
 
@@ -116,20 +143,23 @@ class QPUExecutor:
             logger.error(f"Unsupported task type: {task.type}")
             raise UnknownQPUTaskType(f"Unsupported task type: {task.type}")
 
-        entry = self.queue.enqueue(
+        entry = self.enqueue_task(
             task=task,
             user=user,
             context_id=context_id,
             priority=priority
         )
 
-        # Mark the task as queued after it is successfully added to the queue
-        self.set_task_status(task.task_id, TaskStatus.QUEUED)
-
         logger.info(f"Task enqueued: {task.task_id} ({task.type}) by {user}")
 
         if self.qpu.state != QPUState.IDLE:
             logger.warning(f"QPU busy (state: {self.qpu.state}), deferring task {task.task_id}")
+            return None
+
+        if not self.queue.remove(task.task_id):
+            logger.info(
+                f"Task {task.task_id} was already claimed by another execution path"
+            )
             return None
 
         return self._dispatch(entry.task)

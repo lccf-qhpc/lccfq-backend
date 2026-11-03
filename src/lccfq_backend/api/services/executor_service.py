@@ -125,26 +125,16 @@ class ExecutorService(QPUExecutorServicer):
 
             # Create CircuitTask (auto-generates task_id via UUID)
             circuit_task = CircuitTask(
+                user=user_id,
                 gates=gates,
                 shots=request.shots,
             )
 
-            # Enqueue task directly in queue (async - don't execute immediately)
-            # Using default priority=0 and no context_id for simplicity
-            # NOTE: We call queue.enqueue() directly instead of executor.execute()
-            # because execute() would immediately dispatch if QPU is idle,
-            # but we want async behavior - just enqueue and let main loop handle execution
-            self.executor.queue.enqueue(
+            self.executor.enqueue_task(
                 task=circuit_task,
                 user=user_id,
                 context_id=None,
-                priority=0
-            )
-
-            # Mark the task as queued after it is successfully added to the queue
-            self.executor.set_task_status(
-                circuit_task.task_id,
-                TaskStatus.QUEUED
+                priority=0,
             )
 
             logger.info(f"Circuit task enqueued: {circuit_task.task_id} for user {user_id}")
@@ -210,27 +200,17 @@ class ExecutorService(QPUExecutorServicer):
 
             # Create TestTask (auto-generates task_id via UUID)
             test_task = TestTask(
+                user=user_id,
                 symbol=request.symbol,
                 params=list(request.params),
                 shots=request.shots,
             )
 
-            # Enqueue task directly in queue (async - don't execute immediately)
-            # Using default priority=0 and no context_id for simplicity
-            # NOTE: We call queue.enqueue() directly instead of executor.execute()
-            # because execute() would immediately dispatch if QPU is idle,
-            # but we want async behavior - just enqueue and let main loop handle execution
-            self.executor.queue.enqueue(
+            self.executor.enqueue_task(
                 task=test_task,
                 user=user_id,
                 context_id=None,
-                priority=0
-            )
-
-            # Mark the task as queued after it is successfully added to the queue
-            self.executor.set_task_status(
-                test_task.task_id,
-                TaskStatus.QUEUED
+                priority=0,
             )
 
             logger.info(f"Test task enqueued: {test_task.task_id} for user {user_id}")

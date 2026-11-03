@@ -1,5 +1,7 @@
 import pytest
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
 from lccfq_backend.backend.executor import QPUExecutor
 from lccfq_backend.config import BackendSettings
 from lccfq_backend.model.tasks import CircuitTask, TestTask, ControlTask, TaskType, Gate, TaskStatus
@@ -37,6 +39,36 @@ def test_execute_test_task():
     result = executor.execute(task, user="bob")
     # If QPU not idle, result can be None — still valid
     assert result is None or result.task_id == task.task_id
+
+
+def test_execute_runs_idle_task_only_once(monkeypatch):
+    executor = QPUExecutor(
+        config=_config,
+        users=UserManager(),
+    )
+    executor.qpu.state = QPUState.IDLE
+
+    task = TestTask(
+        task_id="single-execution-task",
+        type=TaskType.TEST,
+        symbol="xeb",
+        params=[1, 2, 3],
+        shots=10,
+    )
+
+    executed_task_ids = []
+
+    def record_execution(executed_task):
+        executed_task_ids.append(executed_task.task_id)
+        return None
+
+    monkeypatch.setattr(executor, "_execute_test", record_execution)
+
+    executor.execute(task, user="alice")
+
+    assert executed_task_ids == [task.task_id]
+    assert executor.queue.list_pending() == []
+    assert executor.get_task_status(task.task_id) == TaskStatus.COMPLETED
 
 
 def test_execute_control_reset():
@@ -167,6 +199,69 @@ def test_batched_context_updates_task_status_to_completed():
 
     assert len(results) == 1
     assert executor.get_task_status(task.task_id) == TaskStatus.COMPLETED
+
+def test_enqueue_task_records_queued_before_running(monkeypatch):
+    executor = QPUExecutor(
+        config=_config,
+        users=UserManager(),
+    )
+
+    task = TestTask(
+        task_id="atomic-enqueue-task",
+        type=TaskType.TEST,
+        symbol="xeb",
+        params=[1, 2, 3],
+        shots=10,
+    )
+
+    task_added_to_queue = Event()
+    allow_enqueue_to_finish = Event()
+    running_status_attempted = Event()
+
+    original_enqueue = executor.queue.enqueue
+    original_set_task_status = executor.set_task_status
+
+    def paused_enqueue(*args, **kwargs):
+        entry = original_enqueue(*args, **kwargs)
+        task_added_to_queue.set()
+        allow_enqueue_to_finish.wait(timeout=5)
+        return entry
+
+    def observed_set_task_status(task_id, status):
+        if status == TaskStatus.RUNNING:
+            running_status_attempted.set()
+
+        return original_set_task_status(task_id, status)
+
+    monkeypatch.setattr(executor.queue, "enqueue", paused_enqueue)
+    monkeypatch.setattr(executor, "set_task_status", observed_set_task_status)
+    monkeypatch.setattr(executor, "_execute_test", lambda _task: None)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        enqueue_future = pool.submit(
+            executor.enqueue_task,
+            task,
+            "alice",
+        )
+
+        try:
+            assert task_added_to_queue.wait(timeout=5)
+
+            execute_future = pool.submit(executor._execute_next)
+
+            assert running_status_attempted.wait(timeout=5)
+        finally:
+            allow_enqueue_to_finish.set()
+
+        enqueue_future.result(timeout=5)
+        execute_future.result(timeout=5)
+
+    assert executor.get_task_status(task.task_id) == TaskStatus.COMPLETED
+    assert executor.get_task_logs(task.task_id) == [
+        "Task status changed to queued",
+        "Task status changed to running",
+        "Task status changed to completed",
+    ]
 
 def test_cancel_task_removes_queued_task():
     executor = QPUExecutor(

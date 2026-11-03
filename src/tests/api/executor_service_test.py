@@ -9,7 +9,10 @@ from lccfq_backend.api.protobufs_compiled.qpu_service_pb2 import (
     TASK_STATUS_UNSPECIFIED,
     CancelTaskRequest,
     GetTargetRequest,
-    GetTaskLogsRequest
+    GetTaskLogsRequest,
+    SubmitCircuitTaskRequest,
+    SubmitTestTaskRequest,
+    Gate as ProtoGate,
 )
 from lccfq_backend.api.services.executor_service import ExecutorService
 from lccfq_backend.backend.executor import QPUExecutor
@@ -225,3 +228,63 @@ def test_get_task_logs_rejects_empty_task_id():
     assert response.error_message == "Task ID cannot be empty"
     context.set_code.assert_called_once_with(grpc.StatusCode.INVALID_ARGUMENT)
     context.set_details.assert_called_once_with("Task ID cannot be empty")
+
+
+def test_submit_circuit_task_uses_certificate_user():
+    service = make_service()
+    service.executor.enqueue_task = Mock()
+
+    context = Mock()
+    context.auth_context.return_value = {
+        "x509_common_name": [b"certificate-user"]
+    }
+
+    response = service.SubmitCircuitTask(
+        SubmitCircuitTaskRequest(
+            gates=[
+                ProtoGate(
+                    symbol="x",
+                    target_qubits=[0],
+                    control_qubits=[],
+                    params=[],
+                )
+            ],
+            shots=10,
+        ),
+        context,
+    )
+
+    assert response.success is True
+
+    enqueue_call = service.executor.enqueue_task.call_args
+    submitted_task = enqueue_call.kwargs["task"]
+
+    assert submitted_task.user == "certificate-user"
+    assert enqueue_call.kwargs["user"] == "certificate-user"
+
+
+def test_submit_test_task_uses_certificate_user():
+    service = make_service()
+    service.executor.enqueue_task = Mock()
+
+    context = Mock()
+    context.auth_context.return_value = {
+        "x509_common_name": [b"certificate-user"]
+    }
+
+    response = service.SubmitTestTask(
+        SubmitTestTaskRequest(
+            symbol="xeb",
+            params=[1, 2],
+            shots=10,
+        ),
+        context,
+    )
+
+    assert response.success is True
+
+    enqueue_call = service.executor.enqueue_task.call_args
+    submitted_task = enqueue_call.kwargs["task"]
+
+    assert submitted_task.user == "certificate-user"
+    assert enqueue_call.kwargs["user"] == "certificate-user"
